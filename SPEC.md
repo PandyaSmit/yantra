@@ -806,11 +806,11 @@ Throwaway code in `spike/`. Results in `docs/phase-0.md`, findings in `docs/cli-
 
 ### Phase 2: Local board
 
-- [ ] `board.ts`: issues, labels, comments, attachments, `issue_seq` numbering, fractional ordering with renormalization, `deriveColumn`.
-- [ ] Board view with dnd-kit (mouse and keyboard), column counts, inline "Add issue", `C` shortcut, filter bar, archive.
-- [ ] Issue drawer: title, Markdown body with autosave, priority, labels (create inline), comments, attachments.
-- [ ] Empty states and the first-run tip; palette can jump to issues by key.
-- [ ] Acceptance: create, edit, label, move, reorder and archive issues; order survives restart; the whole flow works keyboard-only; unit tests for ordering math and column derivation.
+- [x] `board.ts`: issues, labels, comments, attachments, `issue_seq` numbering, fractional ordering with renormalization, `deriveColumn`.
+- [x] Board view with dnd-kit (mouse and keyboard), column counts, inline "Add issue", `C` shortcut, filter bar, archive.
+- [x] Issue drawer: title, Markdown body with autosave, priority, labels (create inline), comments, attachments.
+- [x] Empty states and the first-run tip; palette can jump to issues by key.
+- [x] Acceptance: create, edit, label, move, reorder and archive issues; order survives restart; the whole flow works keyboard-only; unit tests for ordering math and column derivation.
 
 ### Phase 3: Task creation and Files
 

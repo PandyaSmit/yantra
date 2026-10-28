@@ -96,7 +96,7 @@
   max-width: 520px;
   margin-top: 8vh;
   text-align: center;
-  animation: rise-in 400ms var(--ease);
+  animation: global(rise-in) 400ms var(--ease);
 }
 .heroTitle {
   font-size: 28px;
@@ -135,7 +135,7 @@
 /* Wizard ------------------------------------------------------------------- */
 .wizard {
   width: min(640px, 100%);
-  animation: rise-in 300ms var(--ease);
+  animation: global(rise-in) 300ms var(--ease);
 }
 .steps {
   display: flex;

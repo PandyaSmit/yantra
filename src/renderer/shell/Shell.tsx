@@ -1,9 +1,10 @@
 import { useCallback, type ReactNode } from 'react';
-import { Dialog, Kbd, useToast } from '../ui';
+import { Board } from '../board/Board';
+import { FOCUS_SEARCH_EVENT } from '../board/FilterBar';
+import { Dialog, Kbd } from '../ui';
 import { SHORTCUTS, useGlobalShortcuts } from '../lib/hooks';
 import { store, useStore, type View } from '../store';
 import { AddProject } from '../views/AddProject';
-import { BoardView } from '../views/BoardView';
 import { DevUi } from '../views/DevUi';
 import { DoneView, MetricsView, NeedsYouView, RunningView } from '../views/Placeholders';
 import { Settings } from '../views/Settings';
@@ -14,7 +15,7 @@ import { TopBar } from './TopBar';
 import s from './shell.module.css';
 
 const VIEWS: Record<View, () => ReactNode> = {
-  board: () => <BoardView />,
+  board: () => <Board />,
   running: () => <RunningView />,
   needs: () => <NeedsYouView />,
   done: () => <DoneView />,
@@ -29,16 +30,15 @@ export function Shell() {
   const collapsed = useStore((st) => st.sidebarCollapsed);
   const platform = useStore((st) => st.info?.platform);
   const shortcutsOpen = useStore((st) => st.shortcutsOpen);
-  const toast = useToast();
 
-  const onLetter = useCallback(
-    (k: string) => {
-      if (k === 'c' && store.get().route.view === 'board') {
-        toast({ title: 'Writing issues arrives in Phase 2', description: 'The board, issue drawer and drag-and-drop come next.' });
-      }
-    },
-    [toast],
-  );
+  const onLetter = useCallback((k: string) => {
+    const { route, newIssue } = store.get();
+    if (route.view !== 'board' || newIssue) return false;
+    if (k === 'c') store.set({ newIssue: { column: 'backlog' } });
+    else if (k === '/') window.dispatchEvent(new Event(FOCUS_SEARCH_EVENT));
+    else return false;
+    return true;
+  }, []);
   useGlobalShortcuts(onLetter);
 
   return (

@@ -1,5 +1,6 @@
 // The tiny store: one state object, subscribe/notify, and a selector hook. No library.
 import { useSyncExternalStore } from 'react';
+import type { BoardFilters } from '@shared/board';
 import type { AppConfig } from '@shared/schemas';
 import type { AppInfo, PreflightResult, ResolvedTheme } from '@shared/types';
 
@@ -11,6 +12,8 @@ export interface Route {
   /** The project whose board is pinned as the first tab. */
   project?: string;
   section?: SettingsSection;
+  /** The issue open in the board's drawer. */
+  issue?: number;
 }
 
 export interface AppState {
@@ -24,6 +27,10 @@ export interface AppState {
   sidebarCollapsed: boolean;
   paletteOpen: boolean;
   shortcutsOpen: boolean;
+  /** New-issue dialog: open for this column, or null. */
+  newIssue: { column: 'backlog' | 'todo' } | null;
+  /** Board filters per project, for this session only (SPEC: not persisted in MVP). */
+  filters: Record<string, BoardFilters>;
   theme: ResolvedTheme;
 }
 
@@ -38,6 +45,8 @@ const initial: AppState = {
   sidebarCollapsed: false,
   paletteOpen: false,
   shortcutsOpen: false,
+  newIssue: null,
+  filters: {},
   theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
 };
 

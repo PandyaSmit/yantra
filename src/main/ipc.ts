@@ -1,10 +1,12 @@
 // Every ipcMain.handle registration lives here. Payloads are validated with zod before use.
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { app, dialog, ipcMain, nativeTheme, shell, type BrowserWindow } from 'electron';
 import { z } from 'zod';
 import { IPC_ERROR_PREFIX, type Channel, type Req, type Res } from '@shared/ipc';
-import { AppConfigSchema, GeneralSettingsSchema, PriceTableSchema, ProjectSchema, type AppConfig } from '@shared/schemas';
+import { AppConfigSchema, GeneralSettingsSchema, PriceTableSchema, ProjectSchema, type AppConfig, type Project } from '@shared/schemas';
 import type { ConfigState } from '@shared/types';
+import * as board from './board';
 import { saveConfig } from './config';
 import type { Db } from './db/db';
 import { inspectRepo } from './git';
@@ -104,5 +106,84 @@ export function registerIpc(ctx: IpcContext): void {
   handle('shell:openPath', async ({ path }) => {
     const err = await shell.openPath(path);
     if (err) throw new Error(err);
+  });
+
+  handle('dialog:pickFiles', async (req) => {
+    const win = ctx.window();
+    const opts = { title: req?.title, properties: ['openFile' as const, 'multiSelections' as const] };
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+    return r.canceled ? [] : r.filePaths;
+  });
+
+  registerBoardIpc(ctx, requireConfig);
+}
+
+function registerBoardIpc(ctx: IpcContext, requireConfig: () => AppConfig): void {
+  const db = (): Db => {
+    const d = ctx.db();
+    if (!d) throw new Error('The YANTRA database is not open');
+    return d;
+  };
+  const lookup = (slug: string): Project => {
+    const p = requireConfig().projects.find((x) => x.slug === slug);
+    if (!p) throw new Error(`Project "${slug}" is no longer in YANTRA`);
+    return p;
+  };
+  // Attachments live next to the database that is actually open (a changed data root applies after restart).
+  const dataRoot = () => dirname(ctx.dbPath() ?? join(requireConfig().dataRoot, 'yantra.db'));
+  const changed = (projectSlug: string, issueId?: number) => ctx.window()?.webContents.send('board:changed', { projectSlug, issueId });
+  const idOf = (v: unknown) => z.number().int().positive().parse(v);
+
+  handle('board:list', ({ projectSlug }) => board.listBoard(db(), lookup(projectSlug)));
+  handle('issues:get', ({ id }) => board.getIssue(db(), lookup, dataRoot(), idOf(id)));
+  handle('issues:index', () => board.issueIndex(db(), requireConfig().projects));
+
+  handle('issues:create', (req) => {
+    const project = lookup(z.string().parse(req.projectSlug));
+    const id = board.createIssue(db(), project, req);
+    changed(project.slug, id);
+    return board.getCard(db(), lookup, id);
+  });
+  handle('issues:update', (req) => {
+    board.updateIssue(db(), req);
+    const card = board.getCard(db(), lookup, req.id);
+    changed(card.projectSlug, card.id);
+    return card;
+  });
+  handle('issues:move', (req) => {
+    board.moveIssue(db(), req);
+    changed(board.projectOf(db(), req.issueId), req.issueId);
+  });
+  handle('issues:archive', ({ id, archived }) => {
+    board.setArchived(db(), idOf(id), z.boolean().parse(archived));
+    changed(board.projectOf(db(), id), id);
+  });
+  handle('issues:attach', ({ issueId, paths }) => {
+    board.attachFiles(db(), lookup, dataRoot(), idOf(issueId), z.array(z.string().min(1)).min(1).parse(paths));
+    changed(board.projectOf(db(), issueId), issueId);
+  });
+  handle('issues:detach', ({ attachmentId }) => {
+    const issueId = board.removeAttachment(db(), lookup, dataRoot(), idOf(attachmentId));
+    changed(board.projectOf(db(), issueId), issueId);
+  });
+  handle('issues:revealAttachments', async ({ id }) => {
+    const card = board.getCard(db(), lookup, idOf(id));
+    const dir = board.attachmentsDir(dataRoot(), card.projectSlug, card.key);
+    mkdirSync(dir, { recursive: true });
+    const err = await shell.openPath(dir);
+    if (err) throw new Error(err);
+  });
+
+  handle('labels:upsert', (req) => {
+    lookup(req.projectSlug);
+    const label = board.upsertLabel(db(), req);
+    changed(req.projectSlug);
+    return label;
+  });
+  handle('labels:delete', ({ id }) => changed(board.deleteLabel(db(), idOf(id))));
+
+  handle('comments:add', (req) => {
+    board.addComment(db(), req);
+    changed(board.projectOf(db(), req.issueId), req.issueId);
   });
 }

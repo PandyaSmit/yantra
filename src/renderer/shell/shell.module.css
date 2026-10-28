@@ -303,7 +303,7 @@ button.statusItem:hover {
   background: var(--elevated);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
-  animation: rise-in var(--normal) var(--ease);
+  animation: global(rise-in) var(--normal) var(--ease);
   z-index: 45;
 }
 .paletteInputRow {
@@ -319,8 +319,12 @@ button.statusItem:hover {
   height: 48px;
   border: 0;
   background: none;
+  color: var(--text);
   font-size: var(--text-md);
   outline: none;
+}
+.paletteInput:focus-visible {
+  box-shadow: none; /* the palette itself is the focused surface */
 }
 .paletteInput::placeholder {
   color: var(--text-faint);
@@ -387,4 +391,10 @@ button.statusItem:hover {
 }
 .shortcutLabel {
   color: var(--text-muted);
+}
+
+.paletteIssueTitle {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }

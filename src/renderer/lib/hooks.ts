@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { cycleTheme, navigate, setSidebarCollapsed } from '../actions';
+import { cycleTheme, goBack, navigate, setSidebarCollapsed } from '../actions';
 import { store } from '../store';
 
 /** Keeps <html data-theme> in sync. Main sets nativeTheme.themeSource from config, so the media query follows it. */
@@ -30,7 +30,7 @@ export function isTypingTarget(t: EventTarget | null): boolean {
  * App-wide shortcuts: Ctrl+K palette, Ctrl+B sidebar, ? cheat sheet, and two-key "G then …" jumps.
  * Single-letter shortcuts never fire while typing.
  */
-export function useGlobalShortcuts(onLetter?: (key: string) => void) {
+export function useGlobalShortcuts(onLetter?: (key: string) => boolean) {
   useEffect(() => {
     let pendingG = 0;
     const onKey = (e: KeyboardEvent) => {
@@ -50,6 +50,11 @@ export function useGlobalShortcuts(onLetter?: (key: string) => void) {
         void cycleTheme();
         return;
       }
+      if (e.altKey && e.key === 'ArrowLeft') {
+        e.preventDefault();
+        goBack();
+        return;
+      }
       if (mod || e.altKey || isTypingTarget(e.target) || store.get().paletteOpen) return;
       if (e.key === '?') {
         store.set({ shortcutsOpen: true });
@@ -66,17 +71,32 @@ export function useGlobalShortcuts(onLetter?: (key: string) => void) {
         pendingG = Date.now();
         return;
       }
-      onLetter?.(k);
+      // Swallow the key when it opened something, so it isn't typed into the newly focused field.
+      if (onLetter?.(k)) e.preventDefault();
+    };
+    // Mouse "back" button.
+    const onMouse = (e: MouseEvent) => {
+      if (e.button === 3) {
+        e.preventDefault();
+        goBack();
+      }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('mouseup', onMouse);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('mouseup', onMouse);
+    };
   }, [onLetter]);
 }
 
 export const SHORTCUTS: { keys: string[]; label: string }[] = [
   { keys: ['Ctrl', 'K'], label: 'Search or jump to anything' },
   { keys: ['C'], label: 'New issue' },
-  { keys: ['/'], label: 'Focus search' },
+  { keys: ['/'], label: 'Focus board search' },
+  { keys: ['Enter'], label: 'Open the focused card' },
+  { keys: ['Space'], label: 'Pick up or drop the focused card (arrows move it)' },
+  { keys: ['Alt', '←'], label: 'Back' },
   { keys: ['Ctrl', 'B'], label: 'Toggle sidebar' },
   { keys: ['Ctrl', 'Shift', 'L'], label: 'Switch theme' },
   { keys: ['G', 'B'], label: 'Go to board' },

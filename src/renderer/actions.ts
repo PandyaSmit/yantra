@@ -48,11 +48,33 @@ export async function init() {
   void runPreflight();
 }
 
+// Back stack, so the mouse back button and Alt+Left work like a browser (e.g. reopening a closed drawer).
+const history: Route[] = [];
+const sameRoute = (a: Route, b: Route) => JSON.stringify(a) === JSON.stringify(b);
+
 export function navigate(route: Partial<Route>) {
-  const next = { ...store.get().route, ...route };
+  const prev = store.get().route;
+  const next: Route = { ...prev, ...route };
+  // Leaving the board or switching project closes the drawer.
+  if ((route.view && route.view !== 'board') || (route.project && route.project !== prev.project)) {
+    if (!('issue' in route)) next.issue = undefined;
+  }
+  if (sameRoute(prev, next)) return;
+  history.push(prev);
+  if (history.length > 50) history.shift();
   if (next.project) safeSet(LAST_PROJECT, next.project);
   store.set({ route: next });
 }
+
+export function goBack() {
+  const prev = history.pop();
+  if (!prev) return;
+  const known = store.get().config?.projects.some((p) => p.slug === prev.project);
+  store.set({ route: known || !prev.project ? prev : { ...prev, project: store.get().route.project, issue: undefined } });
+}
+
+export const openIssue = (id: number, project?: string) => navigate({ view: 'board', issue: id, ...(project ? { project } : {}) });
+export const closeIssue = () => navigate({ issue: undefined });
 
 export async function runPreflight(claudeBinary?: string) {
   store.set({ preflightRunning: true });

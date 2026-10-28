@@ -4,6 +4,7 @@ export { ConfirmDialog, Dialog } from './Dialog';
 export { EmptyState, Skeleton } from './EmptyState';
 export { ColorSwatches, Field, Input, ProjectMark, Select, Switch, Textarea } from './Form';
 export { Kbd } from './Kbd';
+export { Markdown } from './Markdown';
 export { Menu, MenuItem, MenuSeparator, Popover } from './Menu';
 export { Tabs, type TabItem } from './Tabs';
 export { ToastProvider, useToast, type ToastInput } from './Toast';
