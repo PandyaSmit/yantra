@@ -796,13 +796,13 @@ Throwaway code in `spike/`. Results in `docs/phase-0.md`, findings in `docs/cli-
 
 ### Phase 1: Skeleton and design system
 
-- [ ] electron-vite app with main/preload/renderer, strict TS, typed `window.api` generated from one shared IPC contract type.
-- [ ] Config load/save with zod; SQLite with the full schema and `user_version` migrations.
-- [ ] `tokens.css`, fonts, light/dark/system theme, every `ui/` primitive, and the `DevUi` view.
-- [ ] App shell: sidebar (collapsible), top bar with pinned board tab, status bar (placeholder numbers), command palette with navigation commands.
-- [ ] `preflight.ts` (binary, version, `claude auth status`, onboarding flag) wired into onboarding and Settings → Test.
-- [ ] Onboarding wizard and Settings → Projects/General/Pricing.
-- [ ] Acceptance: add a project through onboarding, restart, it's still there; pre-flight shows the logged-in email, and a wrong binary path shows a clear error; `DevUi` looks finished in both themes; keyboard focus is visible everywhere.
+- [x] electron-vite app with main/preload/renderer, strict TS, typed `window.api` generated from one shared IPC contract type.
+- [x] Config load/save with zod; SQLite with the full schema and `user_version` migrations.
+- [x] `tokens.css`, fonts, light/dark/system theme, every `ui/` primitive, and the `DevUi` view.
+- [x] App shell: sidebar (collapsible), top bar with pinned board tab, status bar (placeholder numbers), command palette with navigation commands.
+- [x] `preflight.ts` (binary, version, `claude auth status`, onboarding flag) wired into onboarding and Settings → Test.
+- [x] Onboarding wizard and Settings → Projects/General/Pricing.
+- [x] Acceptance: add a project through onboarding, restart, it's still there; pre-flight shows the logged-in email, and a wrong binary path shows a clear error; `DevUi` looks finished in both themes; keyboard focus is visible everywhere.
 
 ### Phase 2: Local board
 

@@ -1,0 +1,65 @@
+// The tiny store: one state object, subscribe/notify, and a selector hook. No library.
+import { useSyncExternalStore } from 'react';
+import type { AppConfig } from '@shared/schemas';
+import type { AppInfo, PreflightResult, ResolvedTheme } from '@shared/types';
+
+export type View = 'board' | 'running' | 'needs' | 'done' | 'metrics' | 'settings' | 'add-project' | 'devui';
+export type SettingsSection = 'projects' | 'general' | 'pricing';
+
+export interface Route {
+  view: View;
+  /** The project whose board is pinned as the first tab. */
+  project?: string;
+  section?: SettingsSection;
+}
+
+export interface AppState {
+  status: 'loading' | 'ready' | 'config-error';
+  config: AppConfig | null;
+  configError: { path: string; error: string; issues: string[] } | null;
+  info: AppInfo | null;
+  preflight: PreflightResult | null;
+  preflightRunning: boolean;
+  route: Route;
+  sidebarCollapsed: boolean;
+  paletteOpen: boolean;
+  shortcutsOpen: boolean;
+  theme: ResolvedTheme;
+}
+
+const initial: AppState = {
+  status: 'loading',
+  config: null,
+  configError: null,
+  info: null,
+  preflight: null,
+  preflightRunning: false,
+  route: { view: 'board' },
+  sidebarCollapsed: false,
+  paletteOpen: false,
+  shortcutsOpen: false,
+  theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+};
+
+let state = initial;
+const listeners = new Set<() => void>();
+
+export const store = {
+  get: () => state,
+  set(patch: Partial<AppState> | ((s: AppState) => Partial<AppState>)) {
+    state = { ...state, ...(typeof patch === 'function' ? patch(state) : patch) };
+    listeners.forEach((l) => l());
+  },
+  subscribe(l: () => void) {
+    listeners.add(l);
+    return () => listeners.delete(l);
+  },
+};
+
+/** Stable fallback for selectors: a fresh `[]` per call makes useSyncExternalStore re-render forever. */
+export const NO_PROJECTS: AppConfig['projects'] = [];
+
+/** Select a slice. Return primitives or existing references so renders stay stable. */
+export function useStore<T>(selector: (s: AppState) => T): T {
+  return useSyncExternalStore(store.subscribe, () => selector(store.get()));
+}
