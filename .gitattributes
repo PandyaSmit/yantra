@@ -1,0 +1,3 @@
+# LF everywhere: transcript/hook fixtures are read by byte offset in tests.
+* text=auto eol=lf
+*.cmd text eol=crlf

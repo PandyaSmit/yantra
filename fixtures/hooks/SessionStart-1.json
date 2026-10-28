@@ -1,0 +1,9 @@
+{
+  "session_id": "2ac1c4dc-cf04-4f07-9801-93a571a37b78",
+  "transcript_path": "C:\\Users\\user\\.claude\\projects\\D--projects-yantra-spike-out-toyrepo\\2ac1c4dc-cf04-4f07-9801-93a571a37b78.jsonl",
+  "cwd": "D:\\projects\\yantra\\spike\\out\\toyrepo",
+  "scratchpad_dir": "C:\\Users\\user\\AppData\\Local\\Temp\\claude\\D--projects-yantra-spike-out-toyrepo\\2ac1c4dc-cf04-4f07-9801-93a571a37b78\\scratchpad",
+  "hook_event_name": "SessionStart",
+  "source": "startup",
+  "model": "claude-opus-5-5"
+}

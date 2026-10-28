@@ -1,0 +1,19 @@
+{
+  "session_id": "2ac1c4dc-cf04-4f07-9801-93a571a37b78",
+  "transcript_path": "C:\\Users\\user\\.claude\\projects\\D--projects-yantra-spike-out-toyrepo\\2ac1c4dc-cf04-4f07-9801-93a571a37b78.jsonl",
+  "cwd": "D:\\projects\\yantra\\spike\\out\\toyrepo",
+  "scratchpad_dir": "C:\\Users\\user\\AppData\\Local\\Temp\\claude\\D--projects-yantra-spike-out-toyrepo\\2ac1c4dc-cf04-4f07-9801-93a571a37b78\\scratchpad",
+  "prompt_id": "73a8cefd-ba11-43b9-93fc-ff933a26cd9d",
+  "permission_mode": "acceptEdits",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Agent",
+  "tool_input": {
+    "description": "Count .js files in repo",
+    "prompt": "Count the .js files in the repository at D:\\projects\\yantra\\spike\\out\\toyrepo (recursively, excluding the .git directory). Use the Glob tool with pattern \"**/*.js\". Report only the number and the list of file paths.",
+    "subagent_type": "Explore"
+  },
+  "tool_use_id": "toolu_013V8XR5YfH1vYU9ZQDJqqtd"
+}

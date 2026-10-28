@@ -1,0 +1,10 @@
+{
+  "session_id": "2ac1c4dc-cf04-4f07-9801-93a571a37b78",
+  "transcript_path": "C:\\Users\\user\\.claude\\projects\\D--projects-yantra-spike-out-toyrepo\\2ac1c4dc-cf04-4f07-9801-93a571a37b78.jsonl",
+  "cwd": "D:\\projects\\yantra\\spike\\out\\toyrepo",
+  "scratchpad_dir": "C:\\Users\\user\\AppData\\Local\\Temp\\claude\\D--projects-yantra-spike-out-toyrepo\\2ac1c4dc-cf04-4f07-9801-93a571a37b78\\scratchpad",
+  "prompt_id": "0a2dff13-ca68-456e-aaa5-966fea831329",
+  "permission_mode": "acceptEdits",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "What codeword did you give at the end of your last reply? Answer with: RESUMED <codeword>."
+}

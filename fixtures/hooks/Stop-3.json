@@ -1,0 +1,16 @@
+{
+  "session_id": "4272a892-6662-4b16-aebb-fae200665052",
+  "transcript_path": "C:\\Users\\user\\.claude\\projects\\D--projects-yantra-spike-out-toyrepo\\4272a892-6662-4b16-aebb-fae200665052.jsonl",
+  "cwd": "D:\\projects\\yantra\\spike\\out\\toyrepo",
+  "scratchpad_dir": "C:\\Users\\user\\AppData\\Local\\Temp\\claude\\D--projects-yantra-spike-out-toyrepo\\4272a892-6662-4b16-aebb-fae200665052\\scratchpad",
+  "prompt_id": "01a43739-d7b3-4806-b67a-044215b63228",
+  "permission_mode": "acceptEdits",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "Stop",
+  "stop_hook_active": false,
+  "last_assistant_message": "Hello! I'm in `D:\\projects\\yantra\\spike\\out\\toyrepo`.",
+  "background_tasks": [],
+  "session_crons": []
+}
