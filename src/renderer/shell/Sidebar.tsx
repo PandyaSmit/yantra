@@ -1,12 +1,15 @@
 import type { ReactNode } from 'react';
 import { Bell, CircleCheck, LayoutGrid, PanelLeftClose, PanelLeftOpen, Play, Plus, Settings, Sigma, type LucideIcon } from 'lucide-react';
+import type { NeedsYou } from '@shared/sessions';
 import { IconButton, ProjectMark, Tooltip } from '../ui';
 import { navigate, setSidebarCollapsed } from '../actions';
 import { NO_PROJECTS, useStore, type View } from '../store';
 import { Logo } from './Logo';
 import s from './shell.module.css';
 
-const VIEWS: { view: View; label: string; icon: LucideIcon; shortcut: string[] }[] = [
+const NO_NEEDS: NeedsYou[] = [];
+
+const VIEWS:{ view: View; label: string; icon: LucideIcon; shortcut: string[] }[] = [
   { view: 'board', label: 'Board', icon: LayoutGrid, shortcut: ['G', 'B'] },
   { view: 'running', label: 'Running', icon: Play, shortcut: ['G', 'R'] },
   { view: 'needs', label: 'Needs you', icon: Bell, shortcut: ['G', 'N'] },
@@ -58,6 +61,7 @@ export function Sidebar() {
   const preflight = useStore((s) => s.preflight);
   const preflightRunning = useStore((s) => s.preflightRunning);
   const running = useStore((s) => s.sessions?.sessions.length ?? 0);
+  const needs = useStore((s) => s.sessions?.needs ?? NO_NEEDS);
 
   const claude = preflightRunning
     ? { color: 'var(--text-faint)', text: 'Checking Claude…' }
@@ -93,6 +97,8 @@ export function Sidebar() {
               current={route.view === 'board' && route.project === p.slug}
               onClick={() => navigate({ view: 'board', project: p.slug })}
               collapsed={collapsed}
+              count={needs.filter((n) => n.projectSlug === p.slug).length}
+              alert
             />
           ))}
           <NavItem
@@ -115,7 +121,8 @@ export function Sidebar() {
               onClick={() => navigate({ view })}
               collapsed={collapsed}
               shortcut={shortcut}
-              count={view === 'running' ? running : undefined}
+              count={view === 'running' ? running : view === 'needs' ? needs.length : undefined}
+              alert={view === 'needs'}
             />
           ))}
         </div>

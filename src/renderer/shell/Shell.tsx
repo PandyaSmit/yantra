@@ -8,8 +8,8 @@ import { SHORTCUTS, useGlobalShortcuts } from '../lib/hooks';
 import { store, useStore, type View } from '../store';
 import { AddProject } from '../views/AddProject';
 import { DevUi } from '../views/DevUi';
-import { DoneView, MetricsView, NeedsYouView } from '../views/Placeholders';
-import { RunningView } from '../views/Running';
+import { DoneView, MetricsView } from '../views/Placeholders';
+import { NeedsYouView, RunningView } from '../views/Running';
 import { Settings } from '../views/Settings';
 import { CommandPalette } from './CommandPalette';
 import { Sidebar } from './Sidebar';
@@ -62,6 +62,7 @@ export function Shell() {
     void window.api.invoke['sessions:summary']().then((sessions) => store.set({ sessions }), () => {});
     const offs = [
       window.api.on('sessions:changed', (sessions) => store.set({ sessions })),
+      window.api.on('notice:open', ({ taskId }) => void openTaskById(taskId)),
       window.api.on('notice', (n) => {
         const taskId = n.taskId;
         const viewing = store.get().route.view === 'task' && store.get().route.task === taskId;

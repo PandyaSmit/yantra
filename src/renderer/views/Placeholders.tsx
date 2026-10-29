@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Bell, CircleCheck, Sigma, type LucideIcon } from 'lucide-react';
+import { CircleCheck, Sigma, type LucideIcon } from 'lucide-react';
 import { EmptyState } from '../ui';
 import v from './views.module.css';
 
@@ -18,16 +18,6 @@ function Page({ title, sub, icon, empty, hint }: { title: string; sub: string; i
     </div>
   );
 }
-
-export const NeedsYouView = () => (
-  <Page
-    title="Needs you"
-    sub="Stages waiting for your approval."
-    icon={Bell}
-    empty="All clear"
-    hint="When a stage finishes its artifact, it waits here (and on its card) until you approve, request changes or send it back."
-  />
-);
 
 export const DoneView = () => (
   <Page

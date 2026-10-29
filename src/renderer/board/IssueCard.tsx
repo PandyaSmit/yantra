@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from 'react';
+import type { CSSProperties, KeyboardEvent } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Archive, MessageSquare, Paperclip } from 'lucide-react';
@@ -41,6 +41,19 @@ export function CardView({ card, labels, overlay }: { card: Card; labels: LabelI
         )}
       </div>
       <div className={b.cardTitle}>{card.title}</div>
+      {card.task?.stages && card.task.status !== 'draft' && (
+        <div className={b.cardStages} aria-label={`Stages: ${card.task.stages.map((s) => STATUS_STYLE[s].label).join(', ')}`}>
+          {card.task.stages.map((s, i) => (
+            <span key={i} className={b.stageDot} data-status={s} style={{ '--dot': STATUS_STYLE[s].color } as CSSProperties} />
+          ))}
+          {card.task.stage && (
+            <span className={b.stageName}>
+              {capitalize(card.task.stage.key)}
+              {card.task.stage.round > 1 && ` r${card.task.stage.round}`}
+            </span>
+          )}
+        </div>
+      )}
       {(card.labelIds.length > 0 || card.commentCount > 0 || card.attachmentCount > 0 || card.archived) && (
         <div className={b.cardFoot}>
           <LabelChips labels={labels} ids={card.labelIds} max={3} />

@@ -36,8 +36,26 @@ export interface LiveSession {
   queuePosition: number | null;
 }
 
+/** A stage waiting for my approval, for the Needs you view and the sidebar counts. */
+export interface NeedsYou {
+  taskId: number;
+  stageId: number;
+  issueKey: string;
+  title: string;
+  projectSlug: string;
+  stageKey: string;
+  stageTitle: string;
+  /** The stage's `produces` file, relative to the task folder. */
+  artifact: string | null;
+  round: number;
+  awaitingSince: number | null;
+  lastMessage: string | null;
+}
+
 export interface SessionsSummary {
   sessions: LiveSession[];
+  /** Oldest first. */
+  needs: NeedsYou[];
   /** Live PTYs right now, and the maximum. */
   live: number;
   max: number;
@@ -52,4 +70,6 @@ export interface Notice {
   title: string;
   description?: string;
   taskId?: number;
+  /** Also an OS notification when the window isn't focused (awaiting approval, fence blocks, checks done). */
+  os?: boolean;
 }

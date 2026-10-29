@@ -5,10 +5,11 @@
 import { randomUUID } from 'node:crypto';
 import { cpSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import type { LaunchResult, LiveSession, Notice, RunInfo, SessionsSummary } from '@shared/sessions';
+import type { LaunchResult, LiveSession, NeedsYou, Notice, RunInfo, SessionsSummary } from '@shared/sessions';
 import type { Template } from '@shared/tasks';
 import type { PreflightResult, StageStatus } from '@shared/types';
 import type { ProjectLookup } from './board';
+import { runChecks, type RunChecks } from './checks';
 import type { Db } from './db/db';
 import { aheadCount } from './git';
 import { HookTailer } from './hooks';
@@ -42,6 +43,8 @@ export interface SessionEnv {
   /** The set of live/queued sessions changed (Running view, status bar). */
   sessionsChanged(): void;
   notify(n: Notice): void;
+  /** Defaults to the real runner (checks.ts). */
+  runChecks?: RunChecks;
 }
 
 const RING = 2 * 1024 * 1024;
@@ -62,6 +65,9 @@ interface Live {
   startedAt: number;
   stopping: boolean;
   exited: boolean;
+  /** Resolves once the exit is fully handled. */
+  done: Promise<void>;
+  resolveDone: () => void;
 }
 
 interface StageRow {
@@ -112,6 +118,11 @@ export class Sessions {
   private live = new Map<number, Live>();
   private ended = new Map<number, string>();
   private queue: number[] = [];
+  /** The feedback file the next spawn of a stage passes in its prompt (Request changes, Send back). */
+  private feedback = new Map<number, string>();
+  /** Stages running their `pre` checks before they join the queue, and those stopped meanwhile. */
+  private checking = new Set<number>();
+  private cancelled = new Set<number>();
 
   constructor(private env: SessionEnv) {}
 
@@ -160,20 +171,83 @@ export class Sessions {
     // An ended session awaiting approval can be reopened to talk to it again (End session freed its slot).
     const reopen = stage.status === 'awaiting_approval' && this.liveRunOf(stage.id) === null;
     if (!['pending', 'interrupted'].includes(stage.status) && !reopen) throw new Error(`The ${stage.stage_key} stage is already ${stage.status.replace(/_/g, ' ')}`);
+    return this.enqueue(stage.id);
+  }
+
+  /**
+   * Queues a stage the caller has checked may run (launch above, or the pipeline's reducer):
+   * pre-flight, then its `pre` checks before a fresh start, then the FIFO queue. A feedback file
+   * goes into the next spawn's prompt. Checks run in the background; this returns once queued.
+   */
+  async enqueue(stageId: number, opts: { feedbackFile?: string } = {}): Promise<LaunchResult> {
+    const stage = this.stage(stageId);
+    const task = this.task(stage.task_id);
     if (!existsSync(task.worktree_path)) throw new Error(`The worktree is missing: ${task.worktree_path}`);
 
     const preflight = await this.env.preflight();
-    if (!preflight.ok) return { ok: false, preflight };
+    if (!preflight.ok) {
+      // The pipeline already marked it queued; put it back to where Launch/Resume can pick it up.
+      if (this.stage(stageId).status === 'queued') {
+        this.setStatus(stageId, this.resumable(stage) ? 'interrupted' : 'pending');
+        this.env.changed(task.id);
+      }
+      if (opts.feedbackFile) this.feedback.set(stageId, opts.feedbackFile);
+      return { ok: false, preflight };
+    }
 
     this.env.db.transaction(() => {
       if (task.status === 'draft') this.env.db.prepare("UPDATE task SET status = 'active' WHERE id = ?").run(task.id);
       this.setStatus(stage.id, 'queued');
     })();
-    this.queue.push(stage.id);
+    if (opts.feedbackFile) this.feedback.set(stageId, opts.feedbackFile);
+    const version = preflight.binary.version;
+    const commands = this.env.lookup(task.project_slug).pre ?? stageTemplate(task, stage.stage_key).pre ?? [];
+    if (!this.resumable(stage) && commands.length) void this.checkThenQueue(stageId, commands, version);
+    else {
+      this.queue.push(stage.id);
+      this.pump(version);
+    }
     this.env.changed(task.id);
-    this.pump(preflight.binary.version);
     this.env.sessionsChanged();
     return { ok: true };
+  }
+
+  private async checkThenQueue(stageId: number, commands: string[], version: string | null) {
+    const stage = this.stage(stageId);
+    const task = this.task(stage.task_id);
+    const title = stageTemplate(task, stage.stage_key).title;
+    this.checking.add(stageId);
+    try {
+      const r = await (this.env.runChecks ?? runChecks)({ commands, cwd: task.worktree_path, out: join(task.task_dir, 'checks.txt'), title: `${task.issue_key} ${title}` });
+      this.env.notify({
+        tone: r.failed ? 'info' : 'success',
+        title: `${task.issue_key}: checks finished for ${title}`,
+        description: `${r.passed} passed, ${r.failed} failed. ${title} reads them in checks.txt.`,
+        taskId: task.id,
+        os: true,
+      });
+    } catch (e) {
+      this.env.notify({ tone: 'error', title: `${task.issue_key}: checks couldn't run`, description: (e as Error).message, taskId: task.id });
+    } finally {
+      this.checking.delete(stageId);
+    }
+    if (this.cancelled.delete(stageId) || this.stage(stageId).status !== 'queued') {
+      this.env.changed(task.id);
+      return;
+    }
+    this.queue.push(stageId);
+    this.pump(version);
+    this.env.changed(task.id);
+    this.env.sessionsChanged();
+  }
+
+  isChecking(stageId: number): boolean {
+    return this.checking.has(stageId);
+  }
+
+  /** Its session reached SessionStart, so the next launch resumes rather than starts. */
+  private resumable(stage: StageRow): boolean {
+    return stage.session_id !== null && this.sessionStarted(stage.session_id);
   }
 
   /** Starts queued stages while slots are free, FIFO. */
@@ -208,24 +282,29 @@ export class Sessions {
     const tpl = templateOf(task.template_yaml);
     const st = stageTemplate(task, stage.stage_key);
 
-    const resume = stage.session_id !== null && this.sessionStarted(stage.session_id);
+    const resume = this.resumable(stage);
     const sessionId = resume ? stage.session_id! : randomUUID();
-    const prompt = resume
-      ? undefined
-      : renderPrompt(readPromptFile(st.prompt, this.env.promptDirs), {
-          taskDir: task.task_dir,
-          worktree: task.worktree_path,
-          issueKey: task.issue_key,
-          title: task.title,
-          round: stage.round,
-          feedbackFile: '',
-          baseSha: task.base_sha ?? '',
-        });
+    // A fresh start sends the stage prompt; a feedback round sends it again with the feedback file
+    // (into the same session when there is one); a plain resume after a crash sends nothing.
+    const feedback = this.feedback.get(stageId);
+    this.feedback.delete(stageId);
+    const prompt =
+      resume && !feedback
+        ? undefined
+        : renderPrompt(readPromptFile(st.prompt, this.env.promptDirs), {
+            taskDir: task.task_dir,
+            worktree: task.worktree_path,
+            issueKey: task.issue_key,
+            title: task.title,
+            round: stage.round,
+            feedbackFile: feedback ? join(task.task_dir, feedback) : '',
+            baseSha: task.base_sha ?? '',
+          });
     const now = Date.now();
     const runId = Number(
       db
         .prepare('INSERT INTO run (stage_id, session_id, kind, started_at, claude_version) VALUES (?, ?, ?, ?, ?)')
-        .run(stage.id, sessionId, resume ? 'resume' : 'start', now, version).lastInsertRowid,
+        .run(stage.id, sessionId, feedback ? 'feedback' : resume ? 'resume' : 'start', now, version).lastInsertRowid,
     );
     const files = writeStageFiles(task.task_dir, stage.stage_key, this.env.hookWrapper, {
       stage: stage.stage_key,
@@ -258,7 +337,9 @@ export class Sessions {
     }
     db.prepare("UPDATE stage SET status = 'running', session_id = ? WHERE id = ?").run(sessionId, stage.id);
 
-    const live: Live = { runId, stageId, taskId: task.id, taskDir: task.task_dir, pty, buffer: '', pending: '', flush: null, startedAt: now, stopping: false, exited: false };
+    let resolveDone = () => {};
+    const done = new Promise<void>((r) => (resolveDone = r));
+    const live: Live = { runId, stageId, taskId: task.id, taskDir: task.task_dir, pty, buffer: '', pending: '', flush: null, startedAt: now, stopping: false, exited: false, done, resolveDone };
     this.live.set(runId, live);
     pty.onData((d) => this.onData(live, d));
     pty.onExit(({ exitCode }) => void this.onExit(live, exitCode));
@@ -300,9 +381,11 @@ export class Sessions {
     db.prepare('UPDATE run SET ended_at = COALESCE(ended_at, ?), exit_code = ?, exit_note = ? WHERE id = ?').run(Date.now(), exitCode, note, l.runId);
     const stage = this.stage(l.stageId);
     if (['running', 'idle', 'queued'].includes(stage.status)) {
-      // A session that never started has nothing to resume: back to not started.
-      this.setStatus(l.stageId, sawStart ? 'interrupted' : 'pending');
-      if (!sawStart && stage.session_id) db.prepare('UPDATE stage SET session_id = NULL WHERE id = ?').run(l.stageId);
+      // A session that never started has nothing to resume: back to not started. A resume that
+      // died early (trust prompt, crash) keeps the session it was resuming.
+      const resumable = sawStart || this.resumable(stage);
+      this.setStatus(l.stageId, resumable ? 'interrupted' : 'pending');
+      if (!resumable && stage.session_id) db.prepare('UPDATE stage SET session_id = NULL WHERE id = ?').run(l.stageId);
     }
     this.live.delete(l.runId);
     this.ended.set(l.runId, l.buffer);
@@ -317,6 +400,7 @@ export class Sessions {
     }
     this.env.exited(l.runId, exitCode);
     this.env.changed(l.taskId);
+    l.resolveDone();
     this.pump();
     this.env.sessionsChanged();
   }
@@ -327,6 +411,15 @@ export class Sessions {
    * leaves the queue. Nothing is lost: the session resumes by id.
    */
   async stop(stageId: number): Promise<void> {
+    if (this.checking.has(stageId)) {
+      // Still running its checks: don't join the queue when they finish.
+      this.cancelled.add(stageId);
+      const s = this.stage(stageId);
+      this.setStatus(stageId, s.session_id && this.sessionStarted(s.session_id) ? 'interrupted' : 'pending');
+      this.env.changed(s.task_id);
+      this.env.sessionsChanged();
+      return;
+    }
     const queued = this.queue.indexOf(stageId);
     if (queued >= 0) {
       this.queue.splice(queued, 1);
@@ -359,6 +452,15 @@ export class Sessions {
       // Some platforms don't report an exit after kill(); finish the bookkeeping anyway.
       setTimeout(() => void this.onExit(l, -1), 1000);
     }, STOP_TIMEOUT_MS);
+  }
+
+  /** Stop and wait until the PTY has exited and its exit is recorded (or it left the queue). */
+  async stopAndWait(stageId: number): Promise<void> {
+    const runId = this.liveRunOf(stageId);
+    const l = runId === null ? undefined : this.live.get(runId);
+    if (!l && !this.checking.has(stageId) && !this.queue.includes(stageId)) return;
+    await this.stop(stageId);
+    if (l) await Promise.race([l.done, new Promise((r) => setTimeout(r, STOP_TIMEOUT_MS + 3000))]);
   }
 
   input(runId: number, data: string): void {
@@ -426,25 +528,45 @@ export class Sessions {
   summary(): SessionsSummary {
     const rows = this.env.db
       .prepare(
-        `SELECT s.id AS stage_id, s.stage_key, s.status, s.last_message, t.id AS task_id, t.issue_key, t.title, t.project_slug, t.template_yaml
+        `SELECT s.id AS stage_id, s.stage_key, s.status, s.last_message, s.awaiting_since, s.round,
+                t.id AS task_id, t.issue_key, t.title, t.project_slug, t.template_yaml
          FROM stage s JOIN task t ON t.id = s.task_id
-         WHERE s.status IN ('queued', 'running', 'idle', 'awaiting_approval') ORDER BY s.id`,
+         WHERE s.status IN ('queued', 'running', 'idle', 'awaiting_approval') AND t.status IN ('draft', 'active') ORDER BY s.id`,
       )
       .all() as {
       stage_id: number;
       stage_key: string;
       status: StageStatus;
       last_message: string | null;
+      awaiting_since: number | null;
+      round: number;
       task_id: number;
       issue_key: string;
       title: string;
       project_slug: string;
       template_yaml: string;
     }[];
+    const stageOf = (r: (typeof rows)[number]) => templateOf(r.template_yaml).stages.find((s) => s.key === r.stage_key);
+    const needs: NeedsYou[] = rows
+      .filter((r) => r.status === 'awaiting_approval')
+      .map((r) => ({
+        taskId: r.task_id,
+        stageId: r.stage_id,
+        issueKey: r.issue_key,
+        title: r.title,
+        projectSlug: r.project_slug,
+        stageKey: r.stage_key,
+        stageTitle: stageOf(r)?.title ?? r.stage_key,
+        artifact: stageOf(r)?.produces ?? null,
+        round: r.round,
+        awaitingSince: r.awaiting_since,
+        lastMessage: r.last_message,
+      }))
+      .sort((a, b) => (a.awaitingSince ?? 0) - (b.awaitingSince ?? 0));
     const sessions: LiveSession[] = rows.flatMap((r) => {
       const runId = this.liveRunOf(r.stage_id);
       if (r.status === 'awaiting_approval' && runId === null) return []; // waiting on me, but holds no slot
-      const title = templateOf(r.template_yaml).stages.find((s) => s.key === r.stage_key)?.title ?? r.stage_key;
+      const title = stageOf(r)?.title ?? r.stage_key;
       const q = this.queue.indexOf(r.stage_id);
       return [
         {
@@ -463,7 +585,7 @@ export class Sessions {
         },
       ];
     });
-    return { sessions, live: this.live.size, max: this.env.maxSessions() };
+    return { sessions, needs, live: this.live.size, max: this.env.maxSessions() };
   }
 
   /** Quit: save each run's output, then kill every PTY. The stages are marked interrupted on the next boot. */

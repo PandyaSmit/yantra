@@ -49,12 +49,29 @@ export interface TemplateError {
 
 // Tasks --------------------------------------------------------------------
 
+/** What the task workspace's buttons send to main (`pipeline:act`). */
+export type PipelineAction =
+  | { type: 'approve'; stageKey: string }
+  | { type: 'reject'; stageKey: string; feedback: string }
+  | { type: 'sendBack'; toStageKey: string; feedback: string }
+  | { type: 'skip'; stageKey: string };
+
+/** The reducer's legalActions, which decide the buttons. */
+export type TaskActionType = 'startTask' | 'launchStage' | 'approve' | 'reject' | 'sendBack' | 'skip' | 'pushed' | 'finish' | 'abandon';
+
 export interface StageInfo {
   id: number;
   key: string;
   title: string;
   status: StageStatus;
   round: number;
+  /** The file the stage produces, relative to the task folder. */
+  artifact: string;
+  approvedAt: number | null;
+  /** Approved, and the artifact on disk no longer matches what was approved. */
+  modified: boolean;
+  /** Running its `pre` checks before it joins the queue. */
+  checking: boolean;
   /** The Stop hook's last_assistant_message. */
   lastMessage: string | null;
   /** The run whose PTY is alive now, or null. */
@@ -82,6 +99,9 @@ export interface TaskDetail {
   /** True while main is creating it (the Start task checklist is running). */
   creating: boolean;
   stages: StageInfo[];
+  legal: TaskActionType[];
+  /** Stage keys Send back can target, nearest first. */
+  sendBackTargets: string[];
   defaultBranch: string;
   /** Commits on the default branch since the task branched, or null if unknown. */
   behind: number | null;

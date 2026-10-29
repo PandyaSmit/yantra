@@ -13,6 +13,8 @@ import * as board from './board';
 import type { Db } from './db/db';
 import { cleanClaudeEnv } from './env';
 import { addWorktree, behindCount, branchExists, currentBranch, fetchRemote, headSha, removeWorktree, startPoint } from './git';
+import { legalActions, sendBackTargets } from './machine';
+import { fileHash, loadState } from './pipeline';
 import { renderBrief, renderIssueMd, ensureTaskFolder } from './taskfs';
 import { parseTemplate, type LoadedTemplate } from './templates';
 import { trustFolder } from './trust';
@@ -30,6 +32,8 @@ export interface TaskEnv {
   claudeJson?: string;
   /** The live run of a stage, if its PTY is up (from sessions.ts). */
   liveRun?(stageId: number): number | null;
+  /** The stage is running its `pre` checks (from sessions.ts). */
+  checking?(stageId: number): boolean;
 }
 
 interface TaskRow {
@@ -68,27 +72,36 @@ export function taskRef(db: Db, id: number) {
 const liveTaskOf = (db: Db, issueId: number) =>
   db.prepare("SELECT * FROM task WHERE issue_id = ? AND status <> 'abandoned'").get(issueId) as TaskRow | undefined;
 
-export async function getTask(env: Pick<TaskEnv, 'db' | 'lookup' | 'liveRun'>, id: number): Promise<TaskDetail> {
+export async function getTask(env: Pick<TaskEnv, 'db' | 'lookup' | 'liveRun' | 'checking'>, id: number): Promise<TaskDetail> {
   const row = taskRow(env.db, id);
   const project = env.lookup(row.project_slug);
-  const titles = new Map(parseTemplate(row.template_yaml).stages.map((s) => [s.key, s.title]));
+  const template = parseTemplate(row.template_yaml);
+  const byKey = new Map(template.stages.map((s) => [s.key, s]));
+  const machine = loadState(env.db, env.lookup, id, (stageId) => env.liveRun?.(stageId) ?? null).state;
   const lastRun = env.db.prepare('SELECT id, exit_code, exit_note, ended_at FROM run WHERE stage_id = ? ORDER BY id DESC LIMIT 1');
   const stages = (
-    env.db.prepare('SELECT id, stage_key, status, round, last_message FROM stage WHERE task_id = ? ORDER BY position').all(id) as {
+    env.db.prepare('SELECT id, stage_key, status, round, last_message, approved_hash, approved_at FROM stage WHERE task_id = ? ORDER BY position').all(id) as {
       id: number;
       stage_key: string;
       status: StageStatus;
       round: number;
       last_message: string | null;
+      approved_hash: string | null;
+      approved_at: number | null;
     }[]
   ).map((s): StageInfo => {
     const run = lastRun.get(s.id) as { id: number; exit_code: number | null; exit_note: string | null; ended_at: number | null } | undefined;
+    const artifact = byKey.get(s.stage_key)?.produces ?? '';
     return {
       id: s.id,
       key: s.stage_key,
-      title: titles.get(s.stage_key) ?? s.stage_key,
+      title: byKey.get(s.stage_key)?.title ?? s.stage_key,
       status: s.status,
       round: s.round,
+      artifact,
+      approvedAt: s.approved_at,
+      modified: s.status === 'approved' && s.approved_hash !== null && fileHash(row.task_dir, artifact) !== s.approved_hash,
+      checking: env.checking?.(s.id) ?? false,
       lastMessage: s.last_message,
       liveRunId: env.liveRun?.(s.id) ?? null,
       lastRun: run ? { id: run.id, exitCode: run.exit_code, exitNote: run.exit_note, endedAt: run.ended_at } : null,
@@ -112,6 +125,8 @@ export async function getTask(env: Pick<TaskEnv, 'db' | 'lookup' | 'liveRun'>, i
     setupDoneAt: row.setup_done_at,
     creating: inflight.has(row.issue_id),
     stages,
+    legal: legalActions(machine),
+    sendBackTargets: sendBackTargets(machine).reverse(),
     defaultBranch: project.defaultBranch,
     behind: row.status === 'abandoned' || row.status === 'done' ? null : await behindCount(row.worktree_path, upstream),
   };

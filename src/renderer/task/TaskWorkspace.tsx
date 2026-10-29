@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ChartColumn,
+  Check,
+  MessageSquarePlus,
+  SkipForward,
+  Undo2,
   Clock,
   Copy,
   FileDiff,
@@ -21,7 +25,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { LaunchResult } from '@shared/sessions';
-import type { StageInfo, TaskDetail } from '@shared/tasks';
+import type { PipelineAction, StageInfo, TaskDetail } from '@shared/tasks';
+import { FeedbackDialog, type FeedbackMode } from './FeedbackDialog';
 import type { PreflightResult } from '@shared/types';
 import { Button, ConfirmDialog, EmptyState, IconButton, Menu, MenuItem, MenuSeparator, Skeleton, StatusIcon, Tabs, Tag, Tooltip, useToast } from '../ui';
 import { closeTask, errorMessage, navigate, updateOpenTask } from '../actions';
@@ -58,6 +63,8 @@ function Workspace({ id }: { id: number }) {
   const [finishing, setFinishing] = useState<StartTarget | null>(null);
   const [stopping, setStopping] = useState(false);
   const [launching, setLaunching] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackMode | null>(null);
+  const [skipping, setSkipping] = useState(false);
   /** The failed pre-flight from the last launch attempt, and what to retry once it passes. */
   const [preflight, setPreflight] = useState<PreflightResult | null>(null);
   const retry = useRef<(() => Promise<LaunchResult>) | null>(null);
@@ -133,8 +140,37 @@ function Workspace({ id }: { id: number }) {
     if (retry.current) await launch(retry.current);
   };
 
+  /** Approve / Request changes / Send back / Skip through the reducer in main. */
+  const act = async (a: PipelineAction, done?: string): Promise<boolean> => {
+    setLaunching(true);
+    try {
+      const r = await window.api.invoke['pipeline:act']({ taskId: task.id, action: a });
+      if (!r.ok) {
+        setPreflight(r.preflight);
+        retry.current = async () => {
+          const fresh = await window.api.invoke['tasks:get']({ id: task.id });
+          const next = fresh.stages.find((s) => s.status !== 'approved' && s.status !== 'skipped');
+          return next ? window.api.invoke['sessions:launch']({ stageId: next.id }) : { ok: true };
+        };
+      }
+      if (done) toast({ tone: 'success', title: done, action: { label: 'Watch', onClick: () => navigate({ taskTab: 'terminal' }) } });
+      return true;
+    } catch (e) {
+      toast({ tone: 'error', title: "That didn't go through", description: errorMessage(e) });
+      return false;
+    } finally {
+      setLaunching(false);
+    }
+  };
+  const next = current && task.stages.slice(task.stages.indexOf(current) + 1).find((s) => s.status !== 'skipped');
+  const approve = () =>
+    current && void act({ type: 'approve', stageKey: current.key }, next ? `${current.title} approved. ${next.title} is starting.` : `${current.title} approved. ${task.issueKey} is ready to ship.`);
+  const can = (a: TaskDetail['legal'][number]) => task.legal.includes(a);
+  const awaiting = current?.status === 'awaiting_approval';
+
   const action = ((): { label: string; icon: LucideIcon; run?: () => void; disabled?: boolean; hint: string; secondary?: boolean } | null => {
     if (closed || !current) return null;
+    if (can('approve')) return { label: 'Approve', icon: Check, run: approve, hint: `Approve ${current.artifact} and start ${next?.title ?? 'shipping'}` };
     if (task.status === 'draft')
       return {
         label: 'Start',
@@ -146,11 +182,14 @@ function Workspace({ id }: { id: number }) {
     const launchIt = () => void launch(() => window.api.invoke['sessions:launch']({ stageId: current.id }));
     if (current.status === 'interrupted') return { label: 'Resume', icon: RotateCcw, run: launchIt, hint: `Continue the same ${current.title} conversation` };
     if (current.status === 'pending') return { label: `Launch ${current.title}`, icon: Play, run: launchIt, hint: `Start the ${current.title} stage` };
-    if (current.status === 'queued') return { label: 'Queued', icon: Clock, disabled: true, hint: 'Starts when a session slot frees' };
-    if (current.status === 'awaiting_approval' && current.liveRunId === null)
-      return { label: 'Reopen session', icon: SquareTerminal, run: launchIt, secondary: true, hint: 'Resume the conversation; Approve arrives with the pipeline (Phase 5)' };
+    if (current.status === 'queued')
+      return current.checking
+        ? { label: 'Running checks', icon: LoaderCircle, disabled: true, hint: 'The pre commands run first; output goes to checks.txt' }
+        : { label: 'Queued', icon: Clock, disabled: true, hint: 'Starts when a session slot frees' };
     return null;
   })();
+  const reopen = awaiting && current.liveRunId === null && can('launchStage');
+  const sendBackAsButton = can('sendBack') && (awaiting || task.status === 'ready_to_ship');
 
   const abandon = async (force = false) => {
     try {
@@ -177,6 +216,16 @@ function Workspace({ id }: { id: number }) {
           <span className={`${t.key} mono`}>{task.issueKey}</span>
           <h1 className={t.title}>{task.title}</h1>
           <div className={t.headerActions}>
+            {sendBackAsButton && (
+              <Button icon={Undo2} disabled={launching} onClick={() => setFeedback('sendBack')}>
+                Send back…
+              </Button>
+            )}
+            {can('reject') && (
+              <Button icon={MessageSquarePlus} disabled={launching} onClick={() => setFeedback('reject')}>
+                Request changes
+              </Button>
+            )}
             {action && (
               <Tooltip content={action.hint}>
                 <span>
@@ -187,14 +236,27 @@ function Workspace({ id }: { id: number }) {
               </Tooltip>
             )}
             <Menu trigger={<IconButton icon={MoreHorizontal} label="Task actions" />}>
-              {current && (current.liveRunId !== null || current.status === 'queued') && (
-                <>
-                  <MenuItem icon={Square} onSelect={() => setStopping(true)}>
-                    {current.status === 'queued' ? 'Leave the queue' : current.status === 'running' ? 'Stop session…' : 'End session…'}
-                  </MenuItem>
-                  <MenuSeparator />
-                </>
+              {reopen && (
+                <MenuItem icon={SquareTerminal} onSelect={() => void launch(() => window.api.invoke['sessions:launch']({ stageId: current.id }))}>
+                  Reopen {current.title} session
+                </MenuItem>
               )}
+              {can('sendBack') && !sendBackAsButton && (
+                <MenuItem icon={Undo2} onSelect={() => setFeedback('sendBack')}>
+                  Send back…
+                </MenuItem>
+              )}
+              {current && can('skip') && (
+                <MenuItem icon={SkipForward} onSelect={() => setSkipping(true)}>
+                  Skip {current.title}…
+                </MenuItem>
+              )}
+              {current && (current.liveRunId !== null || current.status === 'queued') && (
+                <MenuItem icon={Square} onSelect={() => setStopping(true)}>
+                  {current.status === 'queued' ? (current.checking ? 'Cancel checks' : 'Leave the queue') : current.status === 'running' ? 'Stop session…' : 'End session…'}
+                </MenuItem>
+              )}
+              {(reopen || can('skip') || can('sendBack') || (current && (current.liveRunId !== null || current.status === 'queued'))) && <MenuSeparator />}
               <MenuItem icon={Copy} onSelect={copyBranch}>
                 Copy branch name
               </MenuItem>
@@ -284,13 +346,18 @@ function Workspace({ id }: { id: number }) {
           </div>
         )}
 
-        <StageRail stages={task.stages} />
-        {current && statusLine(current) && (
+        <StageRail stages={task.stages} onOpen={(s) => navigate({ taskTab: 'files', file: s.artifact })} />
+        {current && statusLine(current) ? (
           <div className={t.status}>
             <StatusIcon status={current.status} size={14} />
             <span className={t.statusText}>{statusLine(current)}</span>
           </div>
-        )}
+        ) : task.status === 'ready_to_ship' ? (
+          <div className={t.status}>
+            <StatusIcon status="approved" size={14} />
+            <span className={t.statusText}>Every stage is approved. Pushing the branch and the PR description arrive with Ship (Phase 6).</span>
+          </div>
+        ) : null}
       </div>
 
       <div className={t.subtabs}>
@@ -343,6 +410,24 @@ function Workspace({ id }: { id: number }) {
           onConfirm={() => call(() => window.api.invoke['sessions:stop']({ stageId: current.id }), 'Could not stop the session')}
         />
       )}
+      {current && (
+        <ConfirmDialog
+          open={skipping}
+          onOpenChange={setSkipping}
+          title={`Skip ${current.title}?`}
+          consequence={`${current.liveRunId !== null ? 'Its session ends, and ' : ''}${current.title} is marked skipped without an approval. ${next ? `${next.title} starts next.` : `${task.issueKey} becomes ready to ship.`}`}
+          confirmLabel={`Skip ${current.title}`}
+          onConfirm={async () => void (await act({ type: 'skip', stageKey: current.key }))}
+        />
+      )}
+      <FeedbackDialog
+        task={task}
+        mode={feedback}
+        onClose={() => setFeedback(null)}
+        onSubmit={(text, key) =>
+          feedback === 'reject' ? act({ type: 'reject', stageKey: key, feedback: text }, 'Feedback sent') : act({ type: 'sendBack', toStageKey: key, feedback: text }, 'Sent back')
+        }
+      />
       <StartTaskDialog card={finishing} resume onClose={() => setFinishing(null)} />
     </div>
   );
@@ -354,13 +439,13 @@ function statusLine(s: StageInfo): string | null {
   const tail = last ? ` · “${last.length > 140 ? `${last.slice(0, 140)}…` : last}”` : '';
   switch (s.status) {
     case 'queued':
-      return `${s.title} is queued and starts when a session slot frees`;
+      return s.checking ? `Running checks before ${s.title} starts; the output goes to checks.txt` : `${s.title} is queued and starts when a session slot frees`;
     case 'running':
       return `${s.title} is running`; // the last message is from the previous turn; the terminal is live
     case 'idle':
       return `${s.title} is waiting for your next message in the terminal${tail}`;
     case 'awaiting_approval':
-      return `${s.title} is ready for you${tail}`;
+      return `${s.title} is ready for you: review ${s.artifact}, then approve or request changes${tail}`;
     case 'interrupted':
       if (s.lastRun?.exitNote === 'stopped') return `${s.title} was stopped. Resume continues the same conversation.`;
       return `${s.title} was interrupted (the app quit or the session closed). Resume continues the same conversation.`;

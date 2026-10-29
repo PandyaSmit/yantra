@@ -1,7 +1,7 @@
 // Every ipcMain.handle registration lives here. Payloads are validated with zod before use.
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
-import { app, dialog, ipcMain, nativeTheme, shell, type BrowserWindow } from 'electron';
+import { app, dialog, ipcMain, nativeTheme, Notification, shell, type BrowserWindow } from 'electron';
 import { spawn as ptySpawn } from 'node-pty';
 import { z } from 'zod';
 import type { Notice } from '@shared/sessions';
@@ -16,6 +16,7 @@ import { inspectRepo } from './git';
 import { configPath, yantraHome } from './paths';
 import { applyHookLine, HookTailer } from './hooks';
 import { writeHookWrapper } from './launch';
+import * as pipeline from './pipeline';
 import { findOnPath, runPreflight } from './preflight';
 import { artifactReady, copyTranscript, Sessions } from './sessions';
 import * as taskfs from './taskfs';
@@ -131,7 +132,7 @@ export function registerIpc(ctx: IpcContext): { shutdown(): void } {
   const sessions = sessionContext(ctx, board, requireConfig);
   registerBoardIpc(board, requireConfig);
   registerTaskIpc(ctx, board, requireConfig, sessions);
-  registerSessionIpc(sessions);
+  registerSessionIpc(sessions, board);
   return { shutdown: () => sessions.shutdown() };
 }
 
@@ -151,7 +152,20 @@ function sessionContext(ctx: IpcContext, { db, lookup }: BoardContext, requireCo
   };
   const get = (): Sessions => {
     if (mgr) return mgr;
-    const notify = (n: Notice) => send('notice', n);
+    const notify = (n: Notice) => {
+      send('notice', n);
+      // The toast is enough while I'm looking; otherwise the OS tells me, and a click brings the task up.
+      const win = ctx.window();
+      if (!n.os || !win || win.isFocused() || !Notification.isSupported()) return;
+      const note = new Notification({ title: n.title, body: n.description ?? '' });
+      note.on('click', () => {
+        if (win.isMinimized()) win.restore();
+        win.show();
+        win.focus();
+        if (n.taskId !== undefined) send('notice:open', { taskId: n.taskId });
+      });
+      note.show();
+    };
     tailer = new HookTailer(
       (_file, line) =>
         applyHookLine(
@@ -204,7 +218,12 @@ function sessionContext(ctx: IpcContext, { db, lookup }: BoardContext, requireCo
   };
   return {
     get,
+    changed: (taskId: number) => {
+      changed(taskId);
+      send('sessions:changed', get().summary());
+    },
     liveRun: (stageId: number) => mgr?.liveRunOf(stageId) ?? null,
+    checking: (stageId: number) => mgr?.isChecking(stageId) ?? false,
     shutdown: () => {
       mgr?.killAll();
       void tailer?.close();
@@ -212,7 +231,17 @@ function sessionContext(ctx: IpcContext, { db, lookup }: BoardContext, requireCo
   };
 }
 
-function registerSessionIpc(sessions: SessionContext): void {
+const PipelineActionSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('approve'), stageKey: z.string().min(1) }),
+  z.object({ type: z.literal('reject'), stageKey: z.string().min(1), feedback: z.string().trim().min(1, 'Write what should change first') }),
+  z.object({ type: z.literal('sendBack'), toStageKey: z.string().min(1), feedback: z.string().trim().min(1, 'Write what should change first') }),
+  z.object({ type: z.literal('skip'), stageKey: z.string().min(1) }),
+]);
+
+function registerSessionIpc(sessions: SessionContext, { db, lookup }: BoardContext): void {
+  handle('pipeline:act', ({ taskId, action }) =>
+    pipeline.act({ db: db(), lookup, sessions: sessions.get(), changed: sessions.changed }, idOf(taskId), PipelineActionSchema.parse(action)),
+  );
   handle('sessions:start', ({ taskId }) => sessions.get().startTask(idOf(taskId)));
   handle('sessions:launch', ({ stageId }) => sessions.get().launch(idOf(stageId)));
   handle('sessions:stop', ({ stageId }) => sessions.get().stop(idOf(stageId)));
@@ -254,6 +283,7 @@ function registerTaskIpc(ctx: IpcContext, { db, lookup, dataRoot, changed }: Boa
     templates: () => loadAll().templates,
     trustWorktrees: () => requireConfig().trustWorktrees,
     liveRun: sessions.liveRun,
+    checking: sessions.checking,
     progress: (p) => send('task:progress', p),
     log: (issueId, taskId, chunk) => send('task:log', { issueId, taskId, chunk }),
     changed: (projectSlug, issueId, taskId) => {

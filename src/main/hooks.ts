@@ -75,7 +75,7 @@ export async function applyHookLine(env: HookEnv, line: HookLine): Promise<void>
   if (!ctx) return;
 
   if (line.blocked) {
-    env.notify({ tone: 'error', title: `${ctx.issue_key} ${ctx.stage_key}: blocked by the fence`, description: `${line.summary ?? line.tool ?? ''}`.trim() || line.reason, taskId: ctx.task_id });
+    env.notify({ tone: 'error', title: `${ctx.issue_key} ${ctx.stage_key}: blocked by the fence`, description: `${line.summary ?? line.tool ?? ''}`.trim() || line.reason, taskId: ctx.task_id, os: true });
   }
 
   // Lines from a run that already ended (late SessionEnd) never move the stage.
@@ -109,7 +109,7 @@ export async function applyHookLine(env: HookEnv, line: HookLine): Promise<void>
       else if (await env.artifactReady(ctx.stage_id)) {
         const was = ctx.status;
         set('awaiting_approval');
-        if (was !== 'awaiting_approval') env.notify({ tone: 'success', title: `${ctx.issue_key}: ${ctx.stage_key} is ready for you`, description: 'Its artifact is written. Review it in Files.', taskId: ctx.task_id });
+        if (was !== 'awaiting_approval') env.notify({ tone: 'success', title: `${ctx.issue_key}: ${ctx.stage_key} is ready for you`, description: 'Its artifact is written. Review it in Files, then approve or request changes.', taskId: ctx.task_id, os: true });
       } else set('idle');
       if (line.lastMessage !== undefined) env.changed(ctx.task_id);
       break;

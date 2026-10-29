@@ -832,13 +832,13 @@ Throwaway code in `spike/`. Results in `docs/phase-0.md`, findings in `docs/cli-
 
 ### Phase 5: Pipeline
 
-- [ ] Template loader + zod schema; `standard.yaml`, `quickfix.yaml`, four prompt files with placeholder rendering.
-- [ ] `machine.ts` reducer and `legalActions` with unit tests covering every action, including `sendBack` resetting later stages.
-- [ ] Stage rail stepper and action bar (Approve / Request changes / Send back to / Skip / End session) driven by `legalActions`.
-- [ ] Artifact snapshot commits in the task-folder repo; "modified since approval" badge.
-- [ ] Checks runner for `pre` commands writing `checks.txt`.
-- [ ] Card stage dots, "Needs you" badge, sidebar Needs-you count, OS notification.
-- [ ] Acceptance: run `quickfix` end to end on the toy repo, then `standard` including one reject and one send-back from Review to Code; nothing advances without my click; the card follows along on the board.
+- [x] Template loader + zod schema; `standard.yaml`, `quickfix.yaml`, four prompt files with placeholder rendering.
+- [x] `machine.ts` reducer and `legalActions` with unit tests covering every action, including `sendBack` resetting later stages.
+- [x] Stage rail stepper and action bar (Approve / Request changes / Send back to / Skip / End session) driven by `legalActions`.
+- [x] Artifact snapshot commits in the task-folder repo; "modified since approval" badge.
+- [x] Checks runner for `pre` commands writing `checks.txt`.
+- [x] Card stage dots, "Needs you" badge, sidebar Needs-you count, OS notification.
+- [~] Acceptance: run `quickfix` end to end on the toy repo, then `standard` including one reject and one send-back from Review to Code; nothing advances without my click; the card follows along on the board.
 
 ### Phase 6: Review and ship (local)
 

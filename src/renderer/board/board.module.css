@@ -342,6 +342,30 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.cardStages {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+/* Filled when the stage is done or live, an outline while it waits its turn. */
+.stageDot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-full);
+  background: var(--dot);
+}
+.stageDot[data-status='pending'] {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--border-strong);
+}
+.stageDot[data-status='skipped'] {
+  background: var(--border-strong);
+}
+.stageName {
+  margin-left: 4px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
 .cardTitle {
   display: -webkit-box;
   overflow: hidden;

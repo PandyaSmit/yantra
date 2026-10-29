@@ -7,9 +7,11 @@ import type { Project } from '@shared/schemas';
 import type { Notice } from '@shared/sessions';
 import type { PreflightResult } from '@shared/types';
 import { createIssue } from './board';
+import type { ChecksInput } from './checks';
 import { openDb, type Db } from './db/db';
 import { applyHookLine, HookTailer } from './hooks';
 import { claudeArgs, renderPrompt, settingsJson, writeHookWrapper } from './launch';
+import { act, fileHash } from './pipeline';
 import { artifactReady, markInterrupted, Sessions, type PtyLike, type SessionEnv } from './sessions';
 import { createTask, getTask, type TaskEnv } from './tasks';
 import { loadTemplates } from './templates';
@@ -20,6 +22,8 @@ const RESOURCES = join(import.meta.dirname, '../../resources');
 class FakePty implements PtyLike {
   written: string[] = [];
   killed = false;
+  /** Exit as soon as /exit is submitted, like claude does (the pipeline waits for it). */
+  autoExit = false;
   private dataCb: (d: string) => void = () => {};
   private exitCb: (e: { exitCode: number }) => void = () => {};
   constructor(
@@ -35,6 +39,7 @@ class FakePty implements PtyLike {
   }
   write(d: string) {
     this.written.push(d);
+    if (this.autoExit && d === '\r' && this.written.at(-2) === '/exit') setTimeout(() => this.exit(0), 5);
   }
   resize() {}
   kill() {
@@ -66,6 +71,8 @@ let tailer: HookTailer;
 let sessions: Sessions;
 let max: number;
 let preflight: PreflightResult;
+let autoExit: boolean;
+let checks: ChecksInput[];
 
 function makeSessions() {
   const env: SessionEnv = {
@@ -79,8 +86,14 @@ function makeSessions() {
     tailer,
     spawn: (file, args, opts) => {
       const p = new FakePty(file, args, opts);
+      p.autoExit = autoExit;
       ptys.push(p);
       return p;
+    },
+    runChecks: async (input) => {
+      checks.push(input);
+      writeFileSync(input.out, `$ ${input.commands.join('\n$ ')}\n[exit 0]\n`);
+      return { passed: input.commands.length, failed: 0 };
     },
     data: () => {},
     exited: () => {},
@@ -114,6 +127,8 @@ beforeEach(() => {
   notices = [];
   max = 3;
   preflight = OK;
+  autoExit = false;
+  checks = [];
   tailer = new HookTailer((_f, line) =>
     applyHookLine(
       { db, artifactReady: (id) => artifactReady(db, id), notify: (n) => notices.push(n), changed: () => {}, sessionEnded: () => {} },
@@ -331,6 +346,14 @@ describe('when the PTY ends', () => {
       ['resume', true],
       ['start', false],
     ]);
+    // A later resume that dies before SessionStart (say, at the trust prompt) keeps the session.
+    await sessions.stop(stageRow(task.id, 'research').id);
+    ptys[1]!.exit(0);
+    await new Promise((r) => setTimeout(r, 50));
+    await sessions.launch(stageRow(task.id, 'research').id);
+    ptys[2]!.exit(1);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(stageRow(task.id, 'research')).toMatchObject({ status: 'interrupted', session_id: sessionId });
   });
 
   it('Stop session: Esc, /exit, confirms the background-work question, and notes the stop', async () => {
@@ -375,6 +398,152 @@ describe('when the PTY ends', () => {
     ptys[0]!.exit(0);
     await new Promise((r) => setTimeout(r, 50));
     expect(makeSessions().attach(runId)).toEqual({ data: '\x1b[1mbold\x1b[0m', live: false });
+  });
+});
+
+describe('the pipeline', () => {
+  const pipe = () => ({ db, lookup: () => project, sessions, changed: () => {} });
+  const settle = () => new Promise((r) => setTimeout(r, 60));
+  /** Bring the newest PTY's stage to awaiting approval: SessionStart, the artifact, a Stop. */
+  async function ready(task: { taskDir: string; worktreePath: string }, artifact: string, opts: { commit?: boolean } = {}) {
+    const pty = ptys.at(-1)!;
+    hook(task.taskDir, runIdOf(pty), 'SessionStart', { source: 'startup' });
+    writeFileSync(join(task.taskDir, artifact), `# ${artifact}\n`);
+    if (opts.commit) {
+      writeFileSync(join(task.worktreePath, `f${ptys.length}.js`), '1\n');
+      git(task.worktreePath, 'add', '.');
+      git(task.worktreePath, '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'TOY-1: step');
+    }
+    hook(task.taskDir, runIdOf(pty), 'Stop', { backgroundRunning: false });
+    await tailer.flush(task.taskDir);
+  }
+
+  beforeEach(() => {
+    autoExit = true;
+  });
+
+  it('approve: hash and commit the artifact, end the session, launch the next stage fresh', async () => {
+    const task = await newTask();
+    await sessions.startTask(task.id);
+    await ready(task, 'research.md');
+    expect(stageRow(task.id, 'research').status).toBe('awaiting_approval');
+
+    expect(await act(pipe(), task.id, { type: 'approve', stageKey: 'research' })).toEqual({ ok: true });
+    const research = db.prepare("SELECT * FROM stage WHERE task_id = ? AND stage_key = 'research'").get(task.id) as { status: string; approved_hash: string; approved_at: number };
+    expect(research).toMatchObject({ status: 'approved', approved_hash: fileHash(task.taskDir, 'research.md') });
+    expect(research.approved_at).toBeGreaterThan(0);
+    expect(ptys[0]!.written).toEqual(['/exit', '\r']);
+    expect(ptys).toHaveLength(2);
+    expect(ptys[1]!.args[0]).toMatch(/^You are the PLAN stage/);
+    expect(stageRow(task.id, 'plan').status).toBe('running');
+    expect(git(task.taskDir, 'log', '-1', '--format=%s')).toBe('Approve Research (round 1)');
+
+    const detail = await getTask({ ...taskEnv, liveRun: (id) => sessions.liveRunOf(id) }, task.id);
+    expect(detail.stages[0]).toMatchObject({ modified: false, artifact: 'research.md' });
+    expect(detail.legal).toEqual(['sendBack', 'skip', 'abandon']);
+    expect(detail.sendBackTargets).toEqual(['research']);
+    // Editing an approved artifact by hand shows "modified since approval".
+    writeFileSync(join(task.taskDir, 'research.md'), '# research.md\nedited\n');
+    expect((await getTask(taskEnv, task.id)).stages[0]!.modified).toBe(true);
+  });
+
+  it('nothing advances without a click: Stop on a ready artifact only waits for me', async () => {
+    const task = await newTask();
+    await sessions.startTask(task.id);
+    await ready(task, 'research.md');
+    await settle();
+    expect(ptys).toHaveLength(1);
+    expect(stageRow(task.id, 'plan').status).toBe('pending');
+    expect(sessions.summary().needs).toEqual([expect.objectContaining({ issueKey: 'TOY-1', stageTitle: 'Research', artifact: 'research.md', round: 1 })]);
+  });
+
+  it('request changes: feedback file, round 2, the same session resumes with the prompt and the file', async () => {
+    const task = await newTask();
+    await sessions.startTask(task.id);
+    const sessionId = stageRow(task.id, 'research').session_id;
+    await ready(task, 'research.md');
+    await act(pipe(), task.id, { type: 'reject', stageKey: 'research', feedback: 'Cover the 429 path too.' });
+
+    expect(readFileSync(join(task.taskDir, 'feedback', 'research-round-2.md'), 'utf8')).toBe('# Feedback for Research, round 2\n\nCover the 429 path too.\n');
+    const again = ptys[1]!;
+    expect(again.args.slice(0, 2)).toEqual(['--resume', sessionId]);
+    expect(again.args[2]).toContain(`Revise based on ${join(task.taskDir, 'feedback', 'research-round-2.md')}.`);
+    expect(runRow(runIdOf(again))).toMatchObject({ kind: 'feedback', session_id: sessionId });
+    expect(db.prepare("SELECT round FROM stage WHERE task_id = ? AND stage_key = 'research'").get(task.id)).toEqual({ round: 2 });
+    expect(git(task.taskDir, 'log', '-1', '--format=%s')).toBe('Feedback for Research, round 2');
+    await expect(act(pipe(), task.id, { type: 'reject', stageKey: 'research', feedback: 'x' })).rejects.toThrow(/isn't waiting for approval/);
+  });
+
+  it('quickfix end to end: checks before Review, send back to Code, review again, ready to ship', async () => {
+    const task = await newTask('Quick', 'quickfix');
+    await sessions.startTask(task.id);
+    await ready(task, 'implementation.md', { commit: true });
+    await act(pipe(), task.id, { type: 'approve', stageKey: 'code' });
+    await settle();
+
+    // Review's pre commands ran in the worktree, into checks.txt, before claude started.
+    expect(checks).toEqual([expect.objectContaining({ commands: ['npm test', 'npm run lint', 'npx tsc --noEmit'], cwd: task.worktreePath, out: join(task.taskDir, 'checks.txt') })]);
+    expect(notices.at(-1)).toMatchObject({ title: 'TOY-1: checks finished for Review', os: true });
+    expect(ptys[1]!.args[0]).toMatch(/^You are the REVIEW stage/);
+    await ready(task, 'review.md');
+    const reviewSession = stageRow(task.id, 'review').session_id;
+
+    await act(pipe(), task.id, { type: 'sendBack', toStageKey: 'code', feedback: 'Add a test for the retry cap.' });
+    expect(stageRow(task.id, 'review')).toMatchObject({ status: 'pending', session_id: null });
+    expect(stageRow(task.id, 'code').status).toBe('running');
+    expect(ptys[2]!.args.slice(0, 2)).toEqual(['--resume', stageRow(task.id, 'code').session_id]);
+    expect(ptys[2]!.args[2]).toContain('Address every comment in');
+    expect(git(task.taskDir, 'log', '-1', '--format=%B').trim()).toBe('Send back to Code\n\nFeedback for Code, round 2');
+
+    await ready(task, 'implementation.md', { commit: true });
+    await act(pipe(), task.id, { type: 'approve', stageKey: 'code' });
+    await settle();
+    expect(checks).toHaveLength(2);
+    // Review starts over in a new session.
+    expect(ptys[3]!.args[0]).toMatch(/^You are the REVIEW stage/);
+    expect(stageRow(task.id, 'review').session_id).not.toBe(reviewSession);
+    await ready(task, 'review.md');
+    await act(pipe(), task.id, { type: 'approve', stageKey: 'review' });
+    const done = await getTask(taskEnv, task.id);
+    expect(done.status).toBe('ready_to_ship');
+    expect(done.stages.map((s) => [s.key, s.status, s.round])).toEqual([
+      ['code', 'approved', 2],
+      ['review', 'approved', 1],
+    ]);
+    expect(done.legal).toEqual(['sendBack', 'pushed', 'finish', 'abandon']);
+    expect(done.sendBackTargets).toEqual(['review', 'code']);
+  });
+
+  it('skip moves on, and a stage stopped during its checks never joins the queue', async () => {
+    const task = await newTask('Quick', 'quickfix');
+    let release = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    const slow = makeSessions();
+    (slow as unknown as { env: SessionEnv }).env.runChecks = async () => {
+      await gate;
+      return { passed: 0, failed: 1 };
+    };
+    sessions = slow;
+    await sessions.startTask(task.id);
+    await act(pipe(), task.id, { type: 'skip', stageKey: 'code' });
+    expect(stageRow(task.id, 'code').status).toBe('skipped');
+    expect(stageRow(task.id, 'review').status).toBe('queued');
+    expect(sessions.isChecking(stageRow(task.id, 'review').id)).toBe(true);
+    await sessions.stop(stageRow(task.id, 'review').id);
+    release();
+    await settle();
+    expect(ptys).toHaveLength(1);
+    expect(stageRow(task.id, 'review').status).toBe('pending');
+  });
+
+  it('a failed pre-flight on the next stage leaves it launchable and says why', async () => {
+    const task = await newTask();
+    await sessions.startTask(task.id);
+    await ready(task, 'research.md');
+    preflight = { ...OK, ok: false, auth: { ...OK.auth, ok: false } };
+    expect(await act(pipe(), task.id, { type: 'approve', stageKey: 'research' })).toEqual({ ok: false, preflight });
+    expect(stageRow(task.id, 'plan').status).toBe('pending');
+    expect((await getTask(taskEnv, task.id)).legal).toContain('launchStage');
   });
 });
 

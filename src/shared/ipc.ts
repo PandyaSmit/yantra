@@ -3,7 +3,7 @@
 import type { BoardData, Card, CreateIssue, IssueDetail, IssueIndexEntry, LabelInfo, MoveIssue, UpdateIssue, UpsertLabel } from './board';
 import type { AppConfig, GeneralSettings, Price, Project } from './schemas';
 import type { LaunchResult, Notice, RunInfo, SessionsSummary } from './sessions';
-import type { FileContent, FileNode, TaskDetail, TaskProgress, TemplateError, TemplateInfo } from './tasks';
+import type { FileContent, FileNode, PipelineAction, TaskDetail, TaskProgress, TemplateError, TemplateInfo } from './tasks';
 import type { AppInfo, ConfigState, PreflightResult, RepoInfo } from './types';
 
 export interface IpcContract {
@@ -38,6 +38,7 @@ export interface IpcContract {
   'sessions:attach': { req: { runId: number }; res: { data: string; live: boolean } };
   'sessions:runs': { req: { taskId: number }; res: RunInfo[] };
   'sessions:summary': { req: void; res: SessionsSummary };
+  'pipeline:act': { req: { taskId: number; action: PipelineAction }; res: LaunchResult };
   'pty:input': { req: { runId: number; data: string }; res: void };
   'pty:resize': { req: { runId: number; cols: number; rows: number }; res: void };
   'app:info': { req: void; res: AppInfo };
@@ -76,6 +77,8 @@ export interface IpcEvents {
   'sessions:changed': SessionsSummary;
   /** A toast from main: fence blocks, a stage ready for me, a trust-prompt exit. */
   notice: Notice;
+  /** An OS notification was clicked: focus that task. */
+  'notice:open': { taskId: number };
 }
 
 // Runtime list of channels for preload. `satisfies` makes the compiler reject a missing or extra name.
@@ -111,6 +114,7 @@ const channelMap = {
   'sessions:attach': true,
   'sessions:runs': true,
   'sessions:summary': true,
+  'pipeline:act': true,
   'pty:input': true,
   'pty:resize': true,
   'app:info': true,

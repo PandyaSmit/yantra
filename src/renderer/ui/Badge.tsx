@@ -51,11 +51,12 @@ export function Pill({ status, children }: { status: StageStatus; children?: Rea
 }
 
 /** A neutral pill for non-stage states (task status, "Draft"…). */
-export function Tag({ tone = 'neutral', children }: { tone?: 'neutral' | 'accent' | 'ok' | 'danger'; children: ReactNode }) {
+export function Tag({ tone = 'neutral', children }: { tone?: 'neutral' | 'accent' | 'ok' | 'warn' | 'danger'; children: ReactNode }) {
   const map = {
     neutral: ['var(--hover)', 'var(--text-muted)'],
     accent: ['var(--accent-soft)', 'var(--accent)'],
     ok: ['var(--ok-soft)', 'var(--ok)'],
+    warn: ['var(--needs-you-soft)', 'var(--needs-you)'],
     danger: ['var(--danger-soft)', 'var(--danger)'],
   } as const;
   const [bg, fg] = map[tone];

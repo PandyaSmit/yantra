@@ -29,6 +29,7 @@ import {
 } from '@shared/board';
 import type { PaletteName } from '@shared/palette';
 import type { Project } from '@shared/schemas';
+import type { StageStatus } from '@shared/types';
 import type { Db } from './db/db';
 
 interface IssueRow {
@@ -46,6 +47,7 @@ interface IssueRow {
   task_id: number | null;
   task_status: TaskStatus | null;
   task_stage: string | null;
+  task_stages: string | null;
   comment_count: number;
   attachment_count: number;
 }
@@ -53,8 +55,9 @@ interface IssueRow {
 // Each issue with its live task (at most one, by the partial unique index) and counts.
 const ISSUE_SELECT = `
   SELECT i.*, t.id AS task_id, t.status AS task_status,
-    (SELECT s.stage_key || ':' || s.status FROM stage s WHERE s.task_id = t.id
+    (SELECT s.stage_key || ':' || s.status || ':' || s.round FROM stage s WHERE s.task_id = t.id
        AND s.status IN ('queued', 'running', 'idle', 'awaiting_approval', 'interrupted') ORDER BY s.position LIMIT 1) AS task_stage,
+    (SELECT group_concat(status, ',') FROM (SELECT s.status FROM stage s WHERE s.task_id = t.id ORDER BY s.position)) AS task_stages,
     (SELECT COUNT(*) FROM issue_comment c WHERE c.issue_id = i.id) AS comment_count,
     (SELECT COUNT(*) FROM issue_attachment a WHERE a.issue_id = i.id) AS attachment_count
   FROM issue i
@@ -65,9 +68,10 @@ const liveTask = (row: IssueRow): Card['task'] => {
   if (row.task_id === null || !row.task_status) return null;
   const task: TaskSummary = { id: row.task_id, status: row.task_status as TaskSummary['status'] };
   if (row.task_stage) {
-    const [key, status] = row.task_stage.split(':') as [string, NonNullable<TaskSummary['stage']>['status']];
-    task.stage = { key, status };
+    const [key, status, round] = row.task_stage.split(':') as [string, NonNullable<TaskSummary['stage']>['status'], string];
+    task.stage = { key, status, round: Number(round) };
   }
+  if (row.task_stages) task.stages = row.task_stages.split(',') as StageStatus[];
   return task;
 };
 

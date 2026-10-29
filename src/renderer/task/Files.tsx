@@ -15,7 +15,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { isEditable, type FileContent, type FileNode, type TaskDetail } from '@shared/tasks';
-import { Button, ConfirmDialog, EmptyState, IconButton, Markdown, Skeleton, Tabs, Textarea, useToast } from '../ui';
+import { Button, ConfirmDialog, EmptyState, IconButton, Markdown, Skeleton, Tabs, Tag, Textarea, useToast } from '../ui';
 import { errorMessage, navigate } from '../actions';
 import { fileSize, fullDate, relativeTime } from '../lib/format';
 import { SAVE_LABEL, useAutosave } from '../lib/useAutosave';
@@ -193,6 +193,7 @@ function Viewer({ task, node, onRemoved }: { task: TaskDetail; node: FileNode; o
   const [error, setError] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
   const platform = useStore((s) => s.info?.platform);
+  const owner = task.stages.find((s) => s.artifact === node.path);
   const full = `${task.taskDir}/${node.path}`.replace(/[\\/]/g, platform === 'win32' ? '\\' : '/');
 
   useEffect(() => {
@@ -216,6 +217,12 @@ function Viewer({ task, node, onRemoved }: { task: TaskDetail; node: FileNode; o
         <span className={t.viewerMeta} title={fullDate(node.mtime)}>
           {fileSize(node.size)} · {relativeTime(node.mtime)}
         </span>
+        {owner?.status === 'approved' && (
+          <span title={owner.approvedAt ? `Approved ${fullDate(owner.approvedAt)}` : undefined}>
+            {owner.modified ? <Tag tone="warn">Modified since approval</Tag> : <Tag tone="ok">Approved</Tag>}
+          </span>
+        )}
+        {owner?.status === 'awaiting_approval' && <Tag tone="warn">Waiting for your approval</Tag>}
         <span className={t.spacer} />
         {node.path === 'issue.md' && (
           <Button

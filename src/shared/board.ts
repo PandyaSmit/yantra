@@ -2,6 +2,7 @@
 // which moves are legal, and filtering. Main and renderer both use these; all are unit-tested.
 import { z } from 'zod';
 import { PALETTE, type PaletteName } from './palette';
+import type { StageStatus } from './types';
 
 export const COLUMNS = ['backlog', 'todo', 'in_progress', 'review', 'done'] as const;
 export type ColumnKey = (typeof COLUMNS)[number];
@@ -33,7 +34,9 @@ export interface TaskSummary {
   id: number;
   status: Exclude<TaskStatus, 'abandoned'>;
   /** The stage that is queued, running, idle, waiting on me or interrupted, for the card's indicator. */
-  stage?: { key: string; status: 'queued' | 'running' | 'idle' | 'awaiting_approval' | 'interrupted' } | null;
+  stage?: { key: string; status: 'queued' | 'running' | 'idle' | 'awaiting_approval' | 'interrupted'; round: number } | null;
+  /** Every stage's status in template order, for the card's progress dots. */
+  stages?: StageStatus[];
 }
 
 export interface Card {
