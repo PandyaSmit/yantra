@@ -96,6 +96,8 @@ export const SHORTCUTS: { keys: string[]; label: string }[] = [
   { keys: ['/'], label: 'Focus board search' },
   { keys: ['Enter'], label: 'Open the focused card' },
   { keys: ['Space'], label: 'Pick up or drop the focused card (arrows move it)' },
+  { keys: ['1–4'], label: 'Task sub-tabs: Terminal, Files, Diff, Metrics' },
+  { keys: ['Ctrl', 'W'], label: 'Close the task tab' },
   { keys: ['Alt', '←'], label: 'Back' },
   { keys: ['Ctrl', 'B'], label: 'Toggle sidebar' },
   { keys: ['Ctrl', 'Shift', 'L'], label: 'Switch theme' },

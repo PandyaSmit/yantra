@@ -4,8 +4,9 @@ import type { BoardFilters } from '@shared/board';
 import type { AppConfig } from '@shared/schemas';
 import type { AppInfo, PreflightResult, ResolvedTheme } from '@shared/types';
 
-export type View = 'board' | 'running' | 'needs' | 'done' | 'metrics' | 'settings' | 'add-project' | 'devui';
+export type View = 'board' | 'task' | 'running' | 'needs' | 'done' | 'metrics' | 'settings' | 'add-project' | 'devui';
 export type SettingsSection = 'projects' | 'general' | 'pricing';
+export type TaskTab = 'terminal' | 'files' | 'diff' | 'metrics';
 
 export interface Route {
   view: View;
@@ -14,6 +15,18 @@ export interface Route {
   section?: SettingsSection;
   /** The issue open in the board's drawer. */
   issue?: number;
+  /** The task shown when view is 'task', its sub-tab, and the task-folder file open in Files. */
+  task?: number;
+  taskTab?: TaskTab;
+  file?: string;
+}
+
+/** A task tab in the top bar. The label is cached so the strip renders before the task loads. */
+export interface OpenTask {
+  id: number;
+  key: string;
+  title: string;
+  projectSlug: string;
 }
 
 export interface AppState {
@@ -31,6 +44,8 @@ export interface AppState {
   newIssue: { column: 'backlog' | 'todo' } | null;
   /** Board filters per project, for this session only (SPEC: not persisted in MVP). */
   filters: Record<string, BoardFilters>;
+  /** Task tabs, in strip order (kept across restarts in localStorage). */
+  openTasks: OpenTask[];
   theme: ResolvedTheme;
 }
 
@@ -47,6 +62,7 @@ const initial: AppState = {
   shortcutsOpen: false,
   newIssue: null,
   filters: {},
+  openTasks: [],
   theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
 };
 

@@ -1,6 +1,6 @@
-import { Bell, CircleCheck, LayoutGrid, Monitor, Moon, Palette, Play, Plus, Search, Settings, Sigma, Sun, type LucideIcon } from 'lucide-react';
+import { Bell, CircleCheck, LayoutGrid, Monitor, Moon, Palette, Play, Plus, Search, Settings, Sigma, Sun, X, type LucideIcon } from 'lucide-react';
 import { IconButton, Kbd } from '../ui';
-import { cycleTheme, navigate } from '../actions';
+import { closeTask, cycleTheme, navigate, openTask } from '../actions';
 import { store, useStore, type View } from '../store';
 import s from './shell.module.css';
 
@@ -21,11 +21,12 @@ export function TopBar() {
   const route = useStore((s) => s.route);
   const project = useStore((s) => s.config?.projects.find((p) => p.slug === s.route.project));
   const theme = useStore((s) => s.config?.theme ?? 'system');
+  const openTasks = useStore((s) => s.openTasks);
   const viewTab = VIEW_TAB[route.view];
 
   return (
     <header className={`${s.topbar} drag`}>
-      {/* Board is always the first, pinned tab. Task tabs join it in Phase 3. */}
+      {/* Board is always the first, pinned tab; each open task follows it. */}
       <div className={s.tabStrip} role="tablist" aria-label="Open tabs">
         {project && (
           <button
@@ -39,6 +40,28 @@ export function TopBar() {
             <span className={s.tabText}>{project.name} board</span>
           </button>
         )}
+        {openTasks.map((t) => {
+          const selected = route.view === 'task' && route.task === t.id;
+          return (
+            <div key={t.id} className={s.taskTab} data-selected={selected || undefined}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                className={s.tab}
+                title={`${t.key} ${t.title}`}
+                onClick={() => openTask(t)}
+                onAuxClick={(e) => e.button === 1 && closeTask(t.id)}
+              >
+                <span className={`${s.tabKey} mono`}>{t.key}</span>
+                <span className={s.tabText}>{t.title}</span>
+              </button>
+              <button type="button" className={s.tabClose} aria-label={`Close ${t.key}`} title="Close tab (Ctrl+W)" onClick={() => closeTask(t.id)}>
+                <X size={12} aria-hidden />
+              </button>
+            </div>
+          );
+        })}
         {viewTab && (
           <button type="button" role="tab" aria-selected className={s.tab}>
             <viewTab.icon size={14} aria-hidden />

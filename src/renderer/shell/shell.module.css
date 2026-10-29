@@ -226,6 +226,47 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.taskTab {
+  position: relative;
+  display: flex;
+  min-width: 72px;
+  flex-shrink: 1;
+}
+.taskTab .tab {
+  width: 100%;
+  max-width: 220px;
+  padding-right: 28px;
+}
+.tabKey {
+  flex: none;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.tabClose {
+  position: absolute;
+  right: 6px;
+  bottom: 8px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--text-faint);
+  opacity: 0;
+  transition: opacity var(--fast) var(--ease);
+}
+.taskTab:hover .tabClose,
+.taskTab[data-selected] .tabClose,
+.tabClose:focus-visible {
+  opacity: 1;
+}
+.tabClose:hover {
+  background: var(--active);
+  color: var(--text);
+}
 .spacer {
   flex: 1;
   height: 100%;

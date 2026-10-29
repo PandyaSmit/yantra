@@ -130,3 +130,9 @@ CREATE TABLE review_comment (
   created_at INTEGER NOT NULL
 );
 `;
+
+// Migration 2 (Phase 3): when task creation finished all its steps. A draft with NULL here had a
+// step fail (or the app quit mid-way), and the task tab offers to finish setup.
+export const SCHEMA_V2 = /* sql */ `
+ALTER TABLE task ADD COLUMN setup_done_at INTEGER;
+`;

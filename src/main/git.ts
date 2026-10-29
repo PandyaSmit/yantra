@@ -1,12 +1,77 @@
-// Git, via the real git binary. Phase 1 only needs to inspect a repo for project setup.
+// Git, via the real git binary: repo inspection for project setup, and task worktrees.
+// Nothing here merges, rebases or pushes into the base branch (SPEC hard rule).
+import { existsSync } from 'node:fs';
 import { basename } from 'node:path';
 import { execa } from 'execa';
 import { displayName, slugify, suggestKey } from '@shared/naming';
 import type { RepoInfo } from '@shared/types';
 
+export interface GitResult {
+  ok: boolean;
+  stdout: string;
+  /** stderr, or the spawn error when git itself could not run. */
+  stderr: string;
+}
+
+export async function runGit(cwd: string, args: string[], timeout = 15_000): Promise<GitResult> {
+  const r = await execa('git', ['-C', cwd, ...args], { reject: false, timeout });
+  return { ok: r.exitCode === 0, stdout: String(r.stdout).trim(), stderr: String(r.stderr || r.shortMessage || '').trim() };
+}
+
 async function git(cwd: string, args: string[]): Promise<string | null> {
-  const r = await execa('git', ['-C', cwd, ...args], { reject: false, timeout: 15_000 });
-  return r.exitCode === 0 ? String(r.stdout).trim() : null;
+  const r = await runGit(cwd, args);
+  return r.ok ? r.stdout : null;
+}
+
+/** The first line of git's complaint, without the "fatal: " prefix. */
+export const gitError = (r: GitResult) => r.stderr.split('\n').find(Boolean)?.replace(/^(fatal|error): /, '') ?? 'git failed';
+
+export async function refExists(repo: string, ref: string): Promise<boolean> {
+  return (await runGit(repo, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])).ok;
+}
+
+export const branchExists = (repo: string, branch: string) => refExists(repo, `refs/heads/${branch}`);
+
+/** `git fetch <remote>`. Returns null on success, else why it failed (offline, no such remote…). */
+export async function fetchRemote(repo: string, remote: string): Promise<string | null> {
+  const r = await runGit(repo, ['fetch', '--quiet', remote], 60_000);
+  return r.ok ? null : gitError(r);
+}
+
+/** What a new task branch starts from: <remote>/<default> when that exists, else the local default branch. */
+export async function startPoint(repo: string, remote: string, defaultBranch: string): Promise<string | null> {
+  if (remote && (await refExists(repo, `refs/remotes/${remote}/${defaultBranch}`))) return `${remote}/${defaultBranch}`;
+  if (await branchExists(repo, defaultBranch)) return defaultBranch;
+  return null;
+}
+
+/** The branch checked out in `dir`, or null if it isn't a git checkout. */
+export const currentBranch = (dir: string) => (existsSync(dir) ? git(dir, ['symbolic-ref', '--quiet', '--short', 'HEAD']) : Promise.resolve(null));
+
+/**
+ * Creates the worktree at `path` on `branch`. A new branch starts at `from`; an existing branch
+ * (left by an earlier, half-finished attempt) is checked out as it is. Stale registrations of
+ * deleted worktree folders are pruned first, or git refuses the path.
+ */
+export async function addWorktree(repo: string, path: string, branch: string, from: string): Promise<void> {
+  await runGit(repo, ['worktree', 'prune']);
+  const args = (await branchExists(repo, branch)) ? ['worktree', 'add', path, branch] : ['worktree', 'add', '-b', branch, path, from];
+  const r = await runGit(repo, args, 120_000);
+  if (!r.ok) throw new Error(gitError(r));
+}
+
+/** `git worktree remove`; without `force` git refuses when there are modified or untracked files. */
+export async function removeWorktree(repo: string, path: string, force = false): Promise<void> {
+  const r = await runGit(repo, ['worktree', 'remove', ...(force ? ['--force'] : []), path], 60_000);
+  if (!r.ok) throw new Error(gitError(r));
+}
+
+export const headSha = (dir: string) => git(dir, ['rev-parse', 'HEAD']);
+
+/** Commits on `upstream` that `dir`'s HEAD doesn't have. */
+export async function behindCount(dir: string, upstream: string): Promise<number | null> {
+  const n = existsSync(dir) ? await git(dir, ['rev-list', '--count', `HEAD..${upstream}`]) : null;
+  return n === null ? null : Number(n);
 }
 
 /** Pick the default branch: the remote's HEAD, else the current branch, else main/master if present. */

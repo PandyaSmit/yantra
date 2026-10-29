@@ -3,6 +3,7 @@ import * as RD from '@radix-ui/react-dialog';
 import {
   Archive,
   ArchiveRestore,
+  ArrowUpRight,
   ChevronDown,
   Copy,
   File,
@@ -18,8 +19,9 @@ import {
 import { checkMove, COLUMN_LABEL, COLUMNS, type Card, type IssueDetail, type LabelInfo, type UpdateIssue } from '@shared/board';
 import type { Project } from '@shared/schemas';
 import { Button, ConfirmDialog, EmptyState, IconButton, Kbd, Markdown, Menu, MenuItem, MenuSeparator, Skeleton, Tabs, Tag, Textarea, Tooltip, useToast } from '../ui';
-import { closeIssue, errorMessage } from '../actions';
+import { closeIssue, errorMessage, openTask } from '../actions';
 import { fileSize, fullDate, relativeTime, shortDate } from '../lib/format';
+import { SAVE_LABEL, useAutosave } from '../lib/useAutosave';
 import { LabelChips, LabelPicker } from './LabelPicker';
 import { PriorityMenu } from './Priority';
 import { useIssue } from './useBoard';
@@ -279,13 +281,15 @@ function TaskPanel({ issue, onStartTask }: { issue: IssueDetail; onStartTask: ()
         <div className={b.taskBox}>
           <Tag tone="accent">{issue.task.status.replace(/_/g, ' ')}</Tag>
           <span className={b.muted}>The card's column follows this task.</span>
-          <Tooltip content="Task workspaces arrive in Phase 3">
-            <span style={{ marginLeft: 'auto' }}>
-              <Button size="sm" disabled>
-                Open task
-              </Button>
-            </span>
-          </Tooltip>
+          <Button
+            size="sm"
+            variant="primary"
+            icon={ArrowUpRight}
+            style={{ marginLeft: 'auto' }}
+            onClick={() => openTask({ id: issue.task!.id, key: issue.key, title: issue.title, projectSlug: issue.projectSlug })}
+          >
+            Open task
+          </Button>
         </div>
       ) : (
         <div className={b.taskBox}>
@@ -309,48 +313,11 @@ function TaskPanel({ issue, onStartTask }: { issue: IssueDetail; onStartTask: ()
   );
 }
 
-type SaveState = 'saved' | 'pending' | 'saving' | 'error';
-
 /** Markdown body with Write / Preview, autosaved 600 ms after typing stops (and on close). */
 function BodyEditor({ issue, onSave }: { issue: IssueDetail; onSave: (body: string) => Promise<boolean> }) {
   const [tab, setTab] = useState<'write' | 'preview'>(issue.body.trim() ? 'preview' : 'write');
-  const [body, setBody] = useState(issue.body);
-  const [state, setState] = useState<SaveState>('saved');
-  const saved = useRef(issue.body);
-  const latest = useRef(body);
-  latest.current = body;
-  const saveRef = useRef(onSave);
-  saveRef.current = onSave;
-
-  // A change from elsewhere replaces the text only if there are no unsaved edits here.
-  useEffect(() => {
-    if (issue.body !== saved.current && latest.current === saved.current) {
-      saved.current = issue.body;
-      setBody(issue.body);
-    }
-  }, [issue.body]);
-
-  useEffect(() => {
-    if (body === saved.current) return;
-    setState('pending');
-    const t = setTimeout(async () => {
-      setState('saving');
-      const ok = await saveRef.current(body);
-      if (ok) saved.current = body;
-      setState(!ok ? 'error' : latest.current === body ? 'saved' : 'pending');
-    }, 600);
-    return () => clearTimeout(t);
-  }, [body]);
-
-  // Flush unsaved text when the drawer closes.
-  useEffect(
-    () => () => {
-      if (latest.current !== saved.current) void saveRef.current(latest.current);
-    },
-    [],
-  );
-
-  const status = { saved: 'Saved', pending: 'Editing…', saving: 'Saving…', error: 'Not saved' }[state];
+  const { text: body, setText: setBody, state } = useAutosave(issue.body, onSave);
+  const status = SAVE_LABEL[state];
 
   return (
     <section className={b.section}>

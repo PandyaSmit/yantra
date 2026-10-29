@@ -1,5 +1,7 @@
-import { useCallback, type ReactNode } from 'react';
+import { useCallback, useEffect, type ReactNode } from 'react';
+import { closeTask, navigate } from '../actions';
 import { Board } from '../board/Board';
+import { TASK_TAB_KEYS, TaskWorkspace } from '../task/TaskWorkspace';
 import { FOCUS_SEARCH_EVENT } from '../board/FilterBar';
 import { Dialog, Kbd } from '../ui';
 import { SHORTCUTS, useGlobalShortcuts } from '../lib/hooks';
@@ -16,6 +18,7 @@ import s from './shell.module.css';
 
 const VIEWS: Record<View, () => ReactNode> = {
   board: () => <Board />,
+  task: () => <TaskWorkspace />,
   running: () => <RunningView />,
   needs: () => <NeedsYouView />,
   done: () => <DoneView />,
@@ -31,8 +34,34 @@ export function Shell() {
   const platform = useStore((st) => st.info?.platform);
   const shortcutsOpen = useStore((st) => st.shortcutsOpen);
 
+  // Ctrl+W: main catches the real key press (so the window stays open) and sends shortcut:closeTab.
+  // A key event that reaches the page anyway (e.g. one injected for testing) closes the tab the same way.
+  useEffect(() => {
+    const closeCurrent = () => {
+      const { route } = store.get();
+      if (route.view === 'task' && route.task !== undefined) closeTask(route.task);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'w') {
+        e.preventDefault();
+        closeCurrent();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    const off = window.api.on('shortcut:closeTab', closeCurrent);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      off();
+    };
+  }, []);
+
   const onLetter = useCallback((k: string) => {
     const { route, newIssue } = store.get();
+    if (route.view === 'task') {
+      const tab = TASK_TAB_KEYS[k as '1'];
+      if (tab) navigate({ taskTab: tab });
+      return !!tab;
+    }
     if (route.view !== 'board' || newIssue) return false;
     if (k === 'c') store.set({ newIssue: { column: 'backlog' } });
     else if (k === '/') window.dispatchEvent(new Event(FOCUS_SEARCH_EVENT));

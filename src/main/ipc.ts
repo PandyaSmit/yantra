@@ -3,15 +3,19 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { app, dialog, ipcMain, nativeTheme, shell, type BrowserWindow } from 'electron';
 import { z } from 'zod';
-import { IPC_ERROR_PREFIX, type Channel, type Req, type Res } from '@shared/ipc';
+import { IPC_ERROR_PREFIX, type Channel, type IpcEvents, type Req, type Res } from '@shared/ipc';
 import { AppConfigSchema, GeneralSettingsSchema, PriceTableSchema, ProjectSchema, type AppConfig, type Project } from '@shared/schemas';
 import type { ConfigState } from '@shared/types';
 import * as board from './board';
 import { saveConfig } from './config';
 import type { Db } from './db/db';
 import { inspectRepo } from './git';
-import { configPath } from './paths';
+import { configPath, yantraHome } from './paths';
 import { runPreflight } from './preflight';
+import * as taskfs from './taskfs';
+import * as tasks from './tasks';
+import type { TaskEnv } from './tasks';
+import { loadTemplates, templateInfo } from './templates';
 
 export interface IpcContext {
   config(): ConfigState;
@@ -19,6 +23,8 @@ export interface IpcContext {
   db(): Db | null;
   window(): BrowserWindow | null;
   dbPath(): string | null;
+  /** The app's shipped resources/ folder (templates, later hook.cjs and prompts). */
+  resourcesDir(): string;
 }
 
 function handle<C extends Channel>(channel: C, fn: (req: Req<C>) => Promise<Res<C>> | Res<C>): void {
@@ -115,10 +121,14 @@ export function registerIpc(ctx: IpcContext): void {
     return r.canceled ? [] : r.filePaths;
   });
 
-  registerBoardIpc(ctx, requireConfig);
+  const board = boardContext(ctx, requireConfig);
+  registerBoardIpc(board, requireConfig);
+  registerTaskIpc(ctx, board, requireConfig);
 }
 
-function registerBoardIpc(ctx: IpcContext, requireConfig: () => AppConfig): void {
+type BoardContext = ReturnType<typeof boardContext>;
+
+function boardContext(ctx: IpcContext, requireConfig: () => AppConfig) {
   const db = (): Db => {
     const d = ctx.db();
     if (!d) throw new Error('The YANTRA database is not open');
@@ -129,11 +139,68 @@ function registerBoardIpc(ctx: IpcContext, requireConfig: () => AppConfig): void
     if (!p) throw new Error(`Project "${slug}" is no longer in YANTRA`);
     return p;
   };
-  // Attachments live next to the database that is actually open (a changed data root applies after restart).
+  // Attachments and task folders live next to the database that is actually open (a changed data root applies after restart).
   const dataRoot = () => dirname(ctx.dbPath() ?? join(requireConfig().dataRoot, 'yantra.db'));
   const changed = (projectSlug: string, issueId?: number) => ctx.window()?.webContents.send('board:changed', { projectSlug, issueId });
-  const idOf = (v: unknown) => z.number().int().positive().parse(v);
+  return { db, lookup, dataRoot, changed };
+}
 
+const idOf = (v: unknown) => z.number().int().positive().parse(v);
+
+function registerTaskIpc(ctx: IpcContext, { db, lookup, dataRoot, changed }: BoardContext, requireConfig: () => AppConfig): void {
+  const send = <E extends keyof IpcEvents>(event: E, payload: IpcEvents[E]) => ctx.window()?.webContents.send(event, payload);
+  const loadAll = () => loadTemplates([join(ctx.resourcesDir(), 'templates'), join(yantraHome(), 'templates')]);
+  const env = (): TaskEnv => ({
+    db: db(),
+    lookup,
+    dataRoot: dataRoot(),
+    templates: () => loadAll().templates,
+    trustWorktrees: () => requireConfig().trustWorktrees,
+    progress: (p) => send('task:progress', p),
+    log: (issueId, taskId, chunk) => send('task:log', { issueId, taskId, chunk }),
+    changed: (projectSlug, issueId, taskId) => {
+      changed(projectSlug, issueId);
+      send('task:changed', { projectSlug, issueId, taskId });
+    },
+  });
+  const dirOf = (id: unknown) => tasks.taskDir(db(), idOf(id));
+  const path = z.string().min(1);
+
+  handle('templates:list', () => {
+    const { templates, errors } = loadAll();
+    return { templates: templates.map(templateInfo), errors };
+  });
+  handle('tasks:create', ({ issueId, template }) => tasks.createTask(env(), { issueId: idOf(issueId), template: z.string().min(1).parse(template) }));
+  handle('tasks:get', ({ id }) => tasks.getTask(env(), idOf(id)));
+  handle('tasks:abandon', ({ id, force }) => tasks.abandonDraft(env(), idOf(id), force === true));
+  handle('tasks:files', ({ id }) => taskfs.listTree(dirOf(id)));
+  handle('tasks:readFile', ({ id, path: p }) => taskfs.readTaskFile(dirOf(id), path.parse(p)));
+  handle('tasks:writeFile', ({ id, path: p, text }) => ({ mtime: taskfs.writeTaskFile(dirOf(id), path.parse(p), z.string().parse(text)) }));
+  // Folder changes made here are announced, so an open Files tab reloads the tree and the file.
+  const folderChanged = (id: unknown) => send('task:changed', tasks.taskRef(db(), idOf(id)));
+  handle('tasks:addResources', ({ id, paths }) => {
+    const names = taskfs.addResources(dirOf(id), z.array(path).min(1).parse(paths));
+    folderChanged(id);
+    return names;
+  });
+  handle('tasks:removeResource', ({ id, path: p }) => {
+    taskfs.removeResource(dirOf(id), path.parse(p));
+    folderChanged(id);
+  });
+  handle('tasks:refreshIssue', ({ id }) => {
+    tasks.refreshIssueSnapshot(env(), idOf(id));
+    folderChanged(id);
+  });
+  handle('tasks:reveal', async ({ id, what, path: p }) => {
+    const t = await tasks.getTask(env(), idOf(id));
+    const target = what === 'worktree' ? t.worktreePath : what === 'file' ? taskfs.safePath(t.taskDir, path.parse(p)) : t.taskDir;
+    if (what === 'file') return shell.showItemInFolder(target);
+    const err = await shell.openPath(target);
+    if (err) throw new Error(err);
+  });
+}
+
+function registerBoardIpc({ db, lookup, dataRoot, changed }: BoardContext, requireConfig: () => AppConfig): void {
   handle('board:list', ({ projectSlug }) => board.listBoard(db(), lookup(projectSlug)));
   handle('issues:get', ({ id }) => board.getIssue(db(), lookup, dataRoot(), idOf(id)));
   handle('issues:index', () => board.issueIndex(db(), requireConfig().projects));

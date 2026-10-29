@@ -6,17 +6,30 @@ export function displayName(folder: string): string {
   return words.map((w) => (w === w.toLowerCase() ? w.charAt(0).toUpperCase() + w.slice(1) : w)).join(' ') || folder;
 }
 
-export function slugify(name: string): string {
-  const slug = name
+const kebab = (text: string) =>
+  text
     .normalize('NFKD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
-    .replace(/-+$/g, '');
-  return slug || 'project';
+    .replace(/^-+|-+$/g, '');
+
+export function slugify(name: string): string {
+  return kebab(name).slice(0, 40).replace(/-+$/g, '') || 'project';
 }
+
+/** "Fix webhook retry storm!" → "fix-webhook-retry-storm", cut at a word boundary to `max` characters. */
+export function branchSlug(title: string, max = 40): string {
+  let slug = kebab(title);
+  if (slug.length > max) {
+    const cut = slug.lastIndexOf('-', max);
+    slug = slug.slice(0, cut > max / 2 ? cut : max).replace(/-+$/g, '');
+  }
+  return slug || 'task';
+}
+
+/** The task branch for an issue, e.g. yantra/PAY-12-fix-webhook-retry-storm. */
+export const taskBranch = (issueKey: string, title: string) => `yantra/${issueKey}-${branchSlug(title)}`;
 
 /**
  * Suggest a 2–5 letter issue key that isn't taken: "Payments API" → PAY, then initials (PA),

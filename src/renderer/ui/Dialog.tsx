@@ -20,7 +20,17 @@ export function Dialog({ open, onOpenChange, title, description, icon, footer, w
     <RD.Root open={open} onOpenChange={onOpenChange}>
       <RD.Portal>
         <RD.Overlay className={s.overlay} />
-        <RD.Content className={[s.dialog, wide && s.dialogWide].filter(Boolean).join(' ')} aria-describedby={undefined}>
+        <RD.Content
+          className={[s.dialog, wide && s.dialogWide].filter(Boolean).join(' ')}
+          aria-describedby={undefined}
+          onOpenAutoFocus={(e) => {
+            // Radix would focus the first tabbable, the header's Close button, which also pops its tooltip.
+            // Focus the element marked data-autofocus instead, else the dialog itself.
+            e.preventDefault();
+            const el = e.currentTarget as HTMLElement;
+            (el.querySelector<HTMLElement>('[data-autofocus]') ?? el).focus();
+          }}
+        >
           <div className={s.dialogHeader}>
             {icon}
             <div>
@@ -73,7 +83,7 @@ export function ConfirmDialog({ open, onOpenChange, title, consequence, confirmL
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button variant={danger ? 'danger' : 'primary'} loading={busy} onClick={confirm} autoFocus>
+          <Button variant={danger ? 'danger' : 'primary'} loading={busy} onClick={confirm} data-autofocus>
             {confirmLabel}
           </Button>
         </>

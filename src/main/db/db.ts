@@ -2,12 +2,12 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
-import { SCHEMA_V1 } from './schema';
+import { SCHEMA_V1, SCHEMA_V2 } from './schema';
 
 export type Db = Database.Database;
 
 /** Migration N (1-based) brings user_version from N-1 to N. Append only; never edit a shipped one. */
-export const MIGRATIONS: readonly string[] = [SCHEMA_V1];
+export const MIGRATIONS: readonly string[] = [SCHEMA_V1, SCHEMA_V2];
 
 export function openDb(path: string): Db {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });

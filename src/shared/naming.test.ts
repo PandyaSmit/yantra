@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { displayName, slugify, suggestKey } from './naming';
+import { branchSlug, displayName, slugify, suggestKey, taskBranch } from './naming';
 
 describe('displayName', () => {
   it('turns folder names into titles, keeping existing capitals', () => {
@@ -24,6 +24,15 @@ describe('slugify', () => {
     const s = slugify('a'.repeat(39) + ' b');
     expect(s.length).toBeLessThanOrEqual(40);
     expect(s.endsWith('-')).toBe(false);
+  });
+});
+
+describe('branchSlug / taskBranch', () => {
+  it('kebab-cases the title and cuts long ones at a word boundary', () => {
+    expect(taskBranch('PAY-12', 'Fix webhook retry storm!')).toBe('yantra/PAY-12-fix-webhook-retry-storm');
+    expect(branchSlug('Make the export button work for every single report type we have')).toBe('make-the-export-button-work-for-every');
+    expect(branchSlug('x'.repeat(60))).toHaveLength(40);
+    expect(branchSlug('???')).toBe('task');
   });
 });
 

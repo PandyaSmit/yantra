@@ -173,7 +173,7 @@ describe('labels, comments, archive, index', () => {
     expect(listBoard(db, PAY).cards[0]!.archived).toBe(true);
     expect(issueIndex(db, [PAY])).toEqual([]);
     setArchived(db, id, false);
-    expect(issueIndex(db, [PAY])).toEqual([{ id, projectSlug: PAY.slug, key: 'PAY-1', title: 'A2' }]);
+    expect(issueIndex(db, [PAY])).toEqual([{ id, projectSlug: PAY.slug, key: 'PAY-1', title: 'A2', taskId: null }]);
   });
 });
 

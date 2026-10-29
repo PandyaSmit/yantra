@@ -2,6 +2,7 @@
 // channel, and window.api's type is derived from this file, so the three cannot drift apart.
 import type { BoardData, Card, CreateIssue, IssueDetail, IssueIndexEntry, LabelInfo, MoveIssue, UpdateIssue, UpsertLabel } from './board';
 import type { AppConfig, GeneralSettings, Price, Project } from './schemas';
+import type { FileContent, FileNode, TaskDetail, TaskProgress, TemplateError, TemplateInfo } from './tasks';
 import type { AppInfo, ConfigState, PreflightResult, RepoInfo } from './types';
 
 export interface IpcContract {
@@ -19,6 +20,17 @@ export interface IpcContract {
   'labels:delete': { req: { id: number }; res: void };
   'comments:add': { req: { issueId: number; body: string }; res: void };
   'dialog:pickFiles': { req: { title?: string }; res: string[] };
+  'templates:list': { req: void; res: { templates: TemplateInfo[]; errors: TemplateError[] } };
+  'tasks:create': { req: { issueId: number; template: string }; res: TaskDetail };
+  'tasks:get': { req: { id: number }; res: TaskDetail };
+  'tasks:abandon': { req: { id: number; force?: boolean }; res: void };
+  'tasks:files': { req: { id: number }; res: FileNode[] };
+  'tasks:readFile': { req: { id: number; path: string }; res: FileContent };
+  'tasks:writeFile': { req: { id: number; path: string; text: string }; res: { mtime: number } };
+  'tasks:addResources': { req: { id: number; paths: string[] }; res: string[] };
+  'tasks:removeResource': { req: { id: number; path: string }; res: void };
+  'tasks:refreshIssue': { req: { id: number }; res: void };
+  'tasks:reveal': { req: { id: number; what: 'folder' | 'worktree' | 'file'; path?: string }; res: void };
   'app:info': { req: void; res: AppInfo };
   'config:get': { req: void; res: ConfigState };
   'config:setGeneral': { req: GeneralSettings; res: AppConfig };
@@ -40,6 +52,14 @@ export interface IpcEvents {
   'theme:changed': { resolved: 'light' | 'dark' };
   /** Any change to a project's issues, labels, comments or attachments (including the renderer's own). */
   'board:changed': { projectSlug: string; issueId?: number };
+  /** A task's row, stages or folder changed. */
+  'task:changed': { taskId: number; issueId: number; projectSlug: string };
+  /** One creation step started, finished or failed. */
+  'task:progress': TaskProgress;
+  /** Ctrl+W, caught in main so it closes a task tab instead of the window. */
+  'shortcut:closeTab': Record<string, never>;
+  /** Output from the setup commands, as it arrives. */
+  'task:log': { issueId: number; taskId: number; chunk: string };
 }
 
 // Runtime list of channels for preload. `satisfies` makes the compiler reject a missing or extra name.
@@ -58,6 +78,17 @@ const channelMap = {
   'labels:delete': true,
   'comments:add': true,
   'dialog:pickFiles': true,
+  'templates:list': true,
+  'tasks:create': true,
+  'tasks:get': true,
+  'tasks:abandon': true,
+  'tasks:files': true,
+  'tasks:readFile': true,
+  'tasks:writeFile': true,
+  'tasks:addResources': true,
+  'tasks:removeResource': true,
+  'tasks:refreshIssue': true,
+  'tasks:reveal': true,
   'app:info': true,
   'config:get': true,
   'config:setGeneral': true,

@@ -63,6 +63,13 @@ function createWindow(): void {
     return { action: 'deny' };
   });
   win.webContents.on('will-navigate', (e) => e.preventDefault());
+  // Ctrl+W closes the current task tab, not the window (the default menu would close it).
+  win.webContents.on('before-input-event', (e, input) => {
+    if (input.type === 'keyDown' && (input.control || input.meta) && !input.alt && !input.shift && input.key.toLowerCase() === 'w') {
+      e.preventDefault();
+      win?.webContents.send('shortcut:closeTab', {});
+    }
+  });
 
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void win.loadFile(join(__dirname, '../renderer/index.html'));
@@ -95,6 +102,7 @@ if (!app.requestSingleInstanceLock()) {
       db: () => db,
       dbPath: () => openedDbPath,
       window: () => win,
+      resourcesDir: () => join(app.getAppPath(), 'resources'),
     });
     createWindow();
   });

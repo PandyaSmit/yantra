@@ -93,6 +93,7 @@ export interface IssueIndexEntry {
   projectSlug: string;
   key: string;
   title: string;
+  taskId: number | null; // its live task, for "Open task" in the palette
 }
 
 // IPC payloads -------------------------------------------------------------

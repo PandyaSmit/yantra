@@ -142,15 +142,16 @@ export function getIssue(db: Db, lookup: ProjectLookup, dataRoot: string, id: nu
 /** Every non-archived issue across the given projects, for the command palette. */
 export function issueIndex(db: Db, projects: Project[]): IssueIndexEntry[] {
   const keys = new Map(projects.map((p) => [p.slug, p.key]));
-  const rows = db.prepare('SELECT id, project_slug, number, title FROM issue WHERE archived = 0 ORDER BY updated_at DESC').all() as {
-    id: number;
-    project_slug: string;
-    number: number;
-    title: string;
-  }[];
+  const rows = db
+    .prepare(
+      `SELECT i.id, i.project_slug, i.number, i.title, t.id AS task_id FROM issue i
+       LEFT JOIN task t ON t.issue_id = i.id AND t.status <> 'abandoned'
+       WHERE i.archived = 0 ORDER BY i.updated_at DESC`,
+    )
+    .all() as { id: number; project_slug: string; number: number; title: string; task_id: number | null }[];
   return rows.flatMap((r) => {
     const key = keys.get(r.project_slug);
-    return key ? [{ id: r.id, projectSlug: r.project_slug, key: issueKey(key, r.number), title: r.title }] : [];
+    return key ? [{ id: r.id, projectSlug: r.project_slug, key: issueKey(key, r.number), title: r.title, taskId: r.task_id }] : [];
   });
 }
 

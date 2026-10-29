@@ -1,0 +1,399 @@
+/* Task workspace ------------------------------------------------------------ */
+.workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s4) var(--s5) var(--s3);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+}
+.key {
+  flex: none;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 18px;
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-left: auto;
+  flex: none;
+}
+.meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  padding-left: 36px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.sep {
+  color: var(--text-faint);
+}
+.branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--hover);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.branch:hover {
+  background: var(--active);
+  color: var(--text);
+}
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-top: var(--s1);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-md);
+  font-size: var(--text-sm);
+}
+.banner[data-tone='info'] {
+  background: var(--accent-soft);
+}
+.banner[data-tone='info'] svg {
+  color: var(--accent);
+}
+.banner[data-tone='warn'] {
+  background: var(--needs-you-soft);
+}
+.banner[data-tone='warn'] > svg {
+  color: var(--needs-you);
+}
+.banner button {
+  margin-left: auto;
+}
+.spin {
+  flex: none;
+  animation: global(spin) 0.8s linear infinite;
+}
+.spacer {
+  flex: 1;
+}
+
+/* Stage rail ----------------------------------------------------------------- */
+.rail {
+  display: flex;
+  align-items: center;
+  margin: var(--s2) 0 0;
+  padding: 0 0 0 36px;
+  list-style: none;
+  overflow-x: auto;
+}
+.railStep {
+  flex: none;
+}
+.railNode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 var(--s3);
+  border-radius: var(--r-full);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+.railNode:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.railTitle {
+  color: var(--text);
+}
+.railRound {
+  font-size: var(--text-xs);
+  opacity: 0.8;
+}
+.railLine {
+  flex: 1 1 24px;
+  min-width: 16px;
+  max-width: 64px;
+  height: 2px;
+  margin: 0 6px;
+  border-radius: 1px;
+  background: var(--border-strong);
+}
+.railLine[data-done] {
+  background: var(--ok);
+}
+
+/* Sub-tabs and body ------------------------------------------------------------ */
+.subtabs {
+  padding: var(--s2) var(--s5);
+  border-bottom: 1px solid var(--border);
+}
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.body > * {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Files ---------------------------------------------------------------------- */
+.files {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+  min-height: 0;
+}
+.treePane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+.paneHead {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 40px;
+  padding: 0 var(--s2) 0 var(--s3);
+  border-bottom: 1px solid var(--border);
+}
+.paneTitle {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.tree {
+  flex: 1;
+  min-height: 0;
+  padding: var(--s1) 0;
+  overflow-y: auto;
+}
+.treeList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.treeItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 28px;
+  padding-right: var(--s2);
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+.treeItem:hover {
+  background: var(--hover);
+}
+.treeItem[data-selected] {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.treeItem:focus-visible {
+  outline: none;
+  box-shadow: inset var(--focus-ring);
+}
+.chevron {
+  flex: none;
+  width: 12px;
+  color: var(--text-faint);
+}
+.treeIcon {
+  flex: none;
+  color: var(--text-muted);
+}
+.treeItem[data-selected] .treeIcon {
+  color: var(--accent);
+}
+.treeName {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.treeCount {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+.treeEmpty {
+  padding-top: 2px;
+  padding-bottom: 6px;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+.treeError {
+  padding: var(--s3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.treeHint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--s2) var(--s3);
+  border-top: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+.viewer {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.viewer > * {
+  flex: 1;
+  min-height: 0;
+}
+.viewerInner {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.viewerHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  height: 40px;
+  flex: none;
+  padding: 0 var(--s2) 0 var(--s4);
+  border-bottom: 1px solid var(--border);
+}
+.viewerPath {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.viewerMeta {
+  flex: none;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+.viewerPad {
+  padding: var(--s5);
+}
+.viewerScroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.doc {
+  max-width: 760px;
+  padding: var(--s5) var(--s6);
+}
+.textView {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: var(--s4) var(--s5);
+  overflow: auto;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.imageView {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--s5);
+  overflow: auto;
+  background: var(--surface);
+}
+.imageView img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-sm);
+}
+.editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.editorBar {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex: none;
+  padding: var(--s2) var(--s4);
+}
+.editorHint {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+.saveState {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+.saveState[data-state='error'] {
+  color: var(--danger);
+}
+.editorInput {
+  flex: 1;
+  width: calc(100% - 2 * var(--s4));
+  min-height: 0;
+  margin: 0 var(--s4) var(--s4);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.65;
+  resize: none;
+}
+.dropOverlay {
+  position: absolute;
+  inset: var(--s2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  border: 2px dashed var(--accent);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--accent-soft) 85%, transparent);
+  color: var(--text);
+  font-weight: var(--weight-medium);
+  pointer-events: none;
+  animation: global(fade-in) var(--fast) var(--ease);
+}
+.dropOverlay svg {
+  color: var(--accent);
+}

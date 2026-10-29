@@ -84,6 +84,7 @@ export function NewIssueDialog({ project, labels }: { project: Project; labels: 
             <Input
               {...p}
               autoFocus
+              data-autofocus
               placeholder="Fix webhook retry storm"
               value={title}
               onChange={(e) => {

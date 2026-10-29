@@ -1,0 +1,41 @@
+name: standard
+description: Research, plan, code, review. For features and anything non-trivial.
+stages:
+  - key: research
+    title: Research
+    prompt: prompts/research.md
+    reads: [brief.md, issue.md, resources/]
+    write: ["task:research.md"]          # task-folder files only
+    produces: research.md
+    gate: manual
+  - key: plan
+    title: Plan
+    prompt: prompts/plan.md
+    reads: [brief.md, issue.md, research.md, resources/]
+    write: ["task:plan.md"]
+    produces: plan.md
+    gate: manual
+  - key: code
+    title: Code
+    prompt: prompts/code.md
+    reads: [plan.md, brief.md]
+    write: ["worktree", "task:implementation.md"]
+    produces: implementation.md
+    requireCommits: true                  # gate disabled until branch has commits beyond base
+    gate: manual
+  - key: review
+    title: Review
+    prompt: prompts/review.md
+    pre: ["npm test", "npm run lint", "npx tsc --noEmit"]   # run by the app, output to checks.txt; project `pre` overrides
+    reads: [plan.md, implementation.md, checks.txt]
+    write: ["task:review.md"]
+    produces: review.md
+    gate: manual
+deny:                                     # applied to every stage by the hook
+  - "git push"
+  - "git merge"
+  - "git rebase"
+  - "gh pr merge"
+  - "glab mr merge"
+  - "git reset --hard"
+  - "git checkout main"

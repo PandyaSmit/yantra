@@ -223,7 +223,8 @@ CREATE TABLE task (
   task_dir      TEXT NOT NULL,
   pushed_at     INTEGER,
   created_at    INTEGER NOT NULL,
-  closed_at     INTEGER
+  closed_at     INTEGER,
+  setup_done_at INTEGER                   -- migration 2: creation steps all finished; NULL = setup unfinished
 );
 -- abandoned tasks stay as history; a new task can then be started on the same issue
 CREATE UNIQUE INDEX one_live_task_per_issue ON task(issue_id) WHERE status <> 'abandoned';
@@ -601,7 +602,7 @@ claude "<rendered stage prompt>" \
 
 If 2 or 3 fails, the stage doesn't launch. A blocking banner says "Open a terminal, run `claude` once, pick a theme and log in", with a **Check again** button. A stage terminal must never show the onboarding screens.
 
-**Workspace trust:** the first launch in any new folder (so every new worktree) shows "Is this a project you created or one you trust?", whose **default is "No, exit"**. Pressing Enter quits with exit code 1. Phase 3 decides between (a) pre-trusting the worktree path in `~/.claude.json` (`projects["<path>"].hasTrustDialogAccepted`) at worktree creation, behind a setting that is on by default and explained in Settings, or (b) letting the dialog show in the stage terminal under a banner saying which option to pick. An exit with code 1 in the first seconds of a run is shown as "Claude exited at the trust prompt" with a **Retry**, not as a crash.
+**Workspace trust:** the first launch in any new folder (so every new worktree) shows "Is this a project you created or one you trust?", whose **default is "No, exit"**. Pressing Enter quits with exit code 1. **Decided in Phase 3: option (a).** At worktree creation YANTRA sets `projects["<path>"].hasTrustDialogAccepted = true` in `~/.claude.json` (path with forward slashes, the way Claude keys it; nothing else in the file changes; written to a temp file and renamed), behind the **Trust new worktrees automatically** setting, which is on by default. With it off, the dialog shows in the stage terminal and I answer it. An exit with code 1 in the first seconds of a run is shown as "Claude exited at the trust prompt" with a **Retry**, not as a crash.
 
 **Generated settings file** (one per stage launch):
 
@@ -814,11 +815,11 @@ Throwaway code in `spike/`. Results in `docs/phase-0.md`, findings in `docs/cli-
 
 ### Phase 3: Task creation and Files
 
-- [ ] Start task dialog (from drawer button or drag into In Progress), template picker, creation checklist with live setup log.
-- [ ] Task folder + `git init`, `issue.md`, prefilled `brief.md`, attachments → `resources/`, worktree + branch, `base_sha`, `draft` status, card shows "Draft".
-- [ ] Task tab with header and empty stage rail; Files sub-tab with tree, `brief.md` Write/Preview editor, `resources/` drag-and-drop.
-- [ ] Decide and implement worktree trust (pre-trust in `~/.claude.json` behind a setting, or banner); document it in `docs/phase-3.md`.
-- [ ] Acceptance: start a task from a card; folder, worktree and branch exist; starting it twice is a no-op, not a crash; cancelling the drag dialog puts the card back.
+- [x] Start task dialog (from drawer button or drag into In Progress), template picker, creation checklist with live setup log.
+- [x] Task folder + `git init`, `issue.md`, prefilled `brief.md`, attachments → `resources/`, worktree + branch, `base_sha`, `draft` status, card shows "Draft".
+- [x] Task tab with header and empty stage rail; Files sub-tab with tree, `brief.md` Write/Preview editor, `resources/` drag-and-drop.
+- [x] Decide and implement worktree trust (pre-trust in `~/.claude.json` behind a setting, or banner); document it in `docs/phase-3.md`.
+- [x] Acceptance: start a task from a card; folder, worktree and branch exist; starting it twice is a no-op, not a crash; cancelling the drag dialog puts the card back.
 
 ### Phase 4: Sessions
 

@@ -1,10 +1,10 @@
 import * as RD from '@radix-ui/react-dialog';
 import { Command } from 'cmdk';
-import { Bell, CircleCheck, FilePlus, FileText, Keyboard, LayoutGrid, Palette, Play, Plus, RotateCw, Search, Settings, Sigma, SunMoon } from 'lucide-react';
+import { Bell, CircleCheck, FilePlus, FileText, FolderGit2, Keyboard, LayoutGrid, Palette, Play, Plus, RotateCw, Search, Settings, Sigma, SunMoon } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { IssueIndexEntry } from '@shared/board';
 import { Kbd, ProjectMark } from '../ui';
-import { cycleTheme, navigate, openIssue, runPreflight } from '../actions';
+import { cycleTheme, navigate, openIssue, openTask, runPreflight } from '../actions';
 import { NO_PROJECTS, store, useStore } from '../store';
 import s from './shell.module.css';
 import ui from '../ui/ui.module.css';
@@ -69,6 +69,26 @@ export function CommandPalette() {
                       </Item>
                     );
                   })}
+                </Command.Group>
+              )}
+
+              {issues.some((i) => i.taskId !== null) && (
+                <Command.Group heading="Tasks">
+                  {issues.flatMap((i) =>
+                    i.taskId === null
+                      ? []
+                      : [
+                          <Item
+                            key={`task-${i.taskId}`}
+                            value={`task open ${i.key} ${i.title} ${i.taskId}`}
+                            icon={<FolderGit2 size={16} />}
+                            hint={<span className="mono">{i.key}</span>}
+                            onSelect={() => openTask({ id: i.taskId!, key: i.key, title: i.title, projectSlug: i.projectSlug })}
+                          >
+                            <span className={s.paletteIssueTitle}>Open task: {i.title}</span>
+                          </Item>,
+                        ],
+                  )}
                 </Command.Group>
               )}
 
