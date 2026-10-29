@@ -1,0 +1,26 @@
+appId: dev.yantra.app
+productName: YANTRA
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**
+  - resources/**
+  - package.json
+# hook.cjs runs as a plain Node script (ELECTRON_RUN_AS_NODE), so it must live outside the asar.
+asarUnpack:
+  - resources/**
+# node-pty and better-sqlite3 ship N-API prebuilds; a rebuild would need Visual Studio (see SPEC Stack).
+npmRebuild: false
+extraResources:
+  - from: build/yantra.cmd
+    to: bin/yantra.cmd
+win:
+  target:
+    - target: nsis
+      arch: x64
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-Setup-${version}.${ext}

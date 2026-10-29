@@ -13,6 +13,9 @@ npm link
 
 `npm link` puts `yantra` on your PATH (via `bin/yantra.js`). Rebuild after changing the code.
 
+With the installed app (Windows), add `<install dir>\resources\bin` to PATH instead. Its
+`yantra.cmd` runs the same client with `YANTRA.exe`.
+
 ## How it works
 
 - `yantra` is a thin client. It sends its arguments to the app's main process over a local

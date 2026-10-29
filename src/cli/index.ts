@@ -32,12 +32,14 @@ function ask(argv: string[]): Promise<Reply> {
 const notRunning = (e: unknown) => ['ENOENT', 'ECONNREFUSED'].includes((e as NodeJS.ErrnoException).code ?? '');
 
 function startApp(): void {
-  // Under plain Node (or ELECTRON_RUN_AS_NODE) the electron package resolves to the binary's path.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const electron = require('electron') as unknown as string;
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
-  spawn(electron, [join(__dirname, '../..'), '--background'], { detached: true, stdio: 'ignore', env, windowsHide: true }).unref();
+  const start = (exe: string, args: string[]) => spawn(exe, [...args, '--background'], { detached: true, stdio: 'ignore', env, windowsHide: true }).unref();
+  // Installed: resources\bin\yantra.cmd runs this file with YANTRA.exe itself, which starts its own app.
+  if (__dirname.includes('app.asar')) return start(process.execPath, []);
+  // From the repo, the electron package resolves to the binary's path under plain Node.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  start(require('electron') as unknown as string, [join(__dirname, '../..')]);
 }
 
 async function main(): Promise<number> {

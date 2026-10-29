@@ -103,6 +103,9 @@ nativeTheme.on('updated', () => {
   win.webContents.send('theme:changed', { resolved: nativeTheme.shouldUseDarkColors ? 'dark' : 'light' });
 });
 
+// A separate YANTRA_HOME is a separate profile: its own Chromium data and its own single-instance lock.
+if (process.env.YANTRA_HOME) app.setPath('userData', join(process.env.YANTRA_HOME, 'electron'));
+
 if (!app.requestSingleInstanceLock()) {
   // Another YANTRA (often the CLI's background one) is running and now shows its window.
   // Exit at once: quit() would let Chromium try to open the profile caches the other one holds.
@@ -122,7 +125,8 @@ if (!app.requestSingleInstanceLock()) {
       db: () => db,
       dbPath: () => openedDbPath,
       window: () => win,
-      resourcesDir: () => join(app.getAppPath(), 'resources'),
+      // Packaged, resources/ is unpacked next to app.asar so hook.cjs can run as a plain script.
+      resourcesDir: () => join(app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked'), 'resources'),
     });
     startCliServer({
       call: invokeLocal,
