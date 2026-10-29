@@ -854,6 +854,11 @@ Throwaway code in `spike/`. Results in `docs/phase-0.md`, findings in `docs/cli-
 - [x] Three clocks, Metrics sub-tab, live status bar totals, global Metrics view and Done view.
 - [x] Acceptance: token totals for a finished task match a manual sum of unique message ids in its transcripts.
 
+### Phase 8: CLI
+
+- [x] A `yantra` command for every board, task, stage, ship and metrics operation. It talks to the app over a local socket, starts the app in the background (no window) when needed, and runs each command through the same handlers as the UI. See `docs/cli.md`.
+- [x] `task wait` / `task screen` / `task type` so an agent can drive stages and unstick sessions; `yantra guide` prints instructions for an agent's CLAUDE.md.
+
 ### Later (not MVP)
 
 - **Forge adapter** (GitLab first, then GitHub) behind one `IssueSource` interface: import issues into the local board as linked cards, and create the PR/MR from the Ship panel. Never merge or approve, permanently.

@@ -36,14 +36,28 @@ export interface IpcContext {
   resourcesDir(): string;
 }
 
+// The same handlers, callable from main itself: the CLI server runs every command through them.
+const handlers = new Map<Channel, (req: never) => unknown>();
+
+/** Calls a channel's handler in-process; errors come back as plain messages (zod issues joined). */
+export async function invokeLocal<C extends Channel>(channel: C, req: Req<C>): Promise<Res<C>> {
+  const fn = handlers.get(channel) as ((req: Req<C>) => Promise<Res<C>> | Res<C>) | undefined;
+  if (!fn) throw new Error(`Unknown channel ${channel}`);
+  try {
+    return await fn(req);
+  } catch (e) {
+    throw new Error(e instanceof z.ZodError ? e.issues.map((i) => i.message).join('; ') : (e as Error).message);
+  }
+}
+
 function handle<C extends Channel>(channel: C, fn: (req: Req<C>) => Promise<Res<C>> | Res<C>): void {
+  handlers.set(channel, fn as (req: never) => unknown);
   ipcMain.handle(channel, async (_e, req: Req<C>) => {
     try {
-      return await fn(req);
+      return await invokeLocal(channel, req);
     } catch (e) {
-      const message = e instanceof z.ZodError ? e.issues.map((i) => i.message).join('; ') : (e as Error).message;
       // Electron wraps thrown errors; the prefix lets the renderer recover the clean message.
-      throw new Error(IPC_ERROR_PREFIX + message);
+      throw new Error(IPC_ERROR_PREFIX + (e as Error).message);
     }
   });
 }

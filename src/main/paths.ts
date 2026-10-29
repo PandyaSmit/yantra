@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -8,6 +9,12 @@ export function yantraHome(): string {
 
 export function configPath(): string {
   return join(yantraHome(), 'config.json');
+}
+
+/** The local socket the `yantra` CLI talks to the app over; one per YANTRA_HOME. */
+export function cliSocket(): string {
+  if (process.platform !== 'win32') return join(yantraHome(), 'yantra.sock');
+  return `\\\\.\\pipe\\yantra-${createHash('sha1').update(yantraHome().toLowerCase()).digest('hex').slice(0, 10)}`;
 }
 
 export function dbPath(dataRoot: string): string {

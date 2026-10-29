@@ -4,6 +4,7 @@
   "private": true,
   "description": "Personal desktop app for issue-driven work with Claude Code.",
   "main": "./out/main/index.js",
+  "bin": { "yantra": "bin/yantra.js" },
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",

@@ -5,7 +5,8 @@ import type { AppConfig } from '@shared/schemas';
 import type { ConfigState } from '@shared/types';
 import { loadConfig } from './config';
 import { openDb, type Db } from './db/db';
-import { registerIpc } from './ipc';
+import { startCliServer } from './cliServer';
+import { invokeLocal, registerIpc } from './ipc';
 import { configPath, dbPath } from './paths';
 import { markInterrupted } from './sessions';
 
@@ -13,6 +14,23 @@ let configState: ConfigState;
 let db: Db | null = null;
 let openedDbPath: string | null = null;
 let win: BrowserWindow | null = null;
+// Started by the `yantra` CLI: no window until `yantra open`, and closing the window keeps sessions running.
+const background = process.argv.includes('--background');
+
+/** Brings the window up (creating it if needed), optionally on a task. */
+function showWindow(taskId?: number): void {
+  if (!win) createWindow();
+  else {
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  }
+  if (taskId === undefined || !win) return;
+  const w = win;
+  // The renderer opens a task on notice:open; give a fresh window a moment to load its config.
+  if (w.webContents.isLoading()) w.webContents.once('did-finish-load', () => setTimeout(() => w.webContents.send('notice:open', { taskId }), 800));
+  else w.webContents.send('notice:open', { taskId });
+}
 
 // Window chrome colours, matching --surface / --text in tokens.css.
 const CHROME = {
@@ -88,10 +106,7 @@ nativeTheme.on('updated', () => {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (win?.isMinimized()) win.restore();
-    win?.focus();
-  });
+  app.on('second-instance', () => showWindow());
 
   void app.whenReady().then(() => {
     configState = loadConfig(configPath());
@@ -107,13 +122,26 @@ if (!app.requestSingleInstanceLock()) {
       window: () => win,
       resourcesDir: () => join(app.getAppPath(), 'resources'),
     });
-    createWindow();
+    startCliServer({
+      call: invokeLocal,
+      db: () => {
+        if (!db) throw new Error('The YANTRA database is not open');
+        return db;
+      },
+      config: () => {
+        if (!configState.ok) throw new Error(`config.json is invalid (${configState.path}); open the app to fix it`);
+        return configState.config;
+      },
+      show: showWindow,
+      quit: () => app.quit(),
+    });
+    if (!background) createWindow();
     // Quitting kills every stage PTY (claude would otherwise linger); they show as interrupted next time.
     app.on('before-quit', () => ipc.shutdown());
+    app.on('will-quit', () => db?.close());
   });
 
   app.on('window-all-closed', () => {
-    db?.close();
-    app.quit();
+    if (!background) app.quit();
   });
 }

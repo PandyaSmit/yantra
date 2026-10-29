@@ -1,4 +1,4 @@
-﻿{
+{
   "compilerOptions": {
     "target": "ES2023",
     "module": "ESNext",
@@ -14,5 +14,5 @@
     "noEmit": true,
     "paths": { "@shared/*": ["./src/shared/*"] }
   },
-  "include": ["electron.vite.config.mts", "vitest.config.mts", "src/main/**/*", "src/preload/**/*", "src/shared/**/*"]
+  "include": ["electron.vite.config.mts", "vitest.config.mts", "src/main/**/*", "src/cli/**/*", "src/preload/**/*", "src/shared/**/*"]
 }
