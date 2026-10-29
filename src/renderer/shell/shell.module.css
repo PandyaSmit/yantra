@@ -46,11 +46,7 @@
   letter-spacing: 0.08em;
   font-size: var(--text-sm);
 }
-.collapseButton {
-  margin-left: auto;
-}
-.app[data-collapsed='true'] .brandName,
-.app[data-collapsed='true'] .collapseButton {
+.app[data-collapsed='true'] .brandName {
   display: none;
 }
 .app[data-collapsed='true'] .brand {
@@ -69,15 +65,37 @@
   margin-top: var(--s1);
 }
 .sectionTitle {
-  padding: 0 var(--s2) var(--s1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 22px;
+  padding: 0 var(--s1) var(--s1) var(--s2);
   color: var(--text-faint);
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+.sectionAction {
+  opacity: 0;
+  transition: opacity var(--fast) var(--ease);
+}
+.section:hover .sectionAction,
+.sectionAction:focus-visible,
+.spinning {
+  opacity: 1;
+}
+.spinning svg {
+  animation: shell-spin 0.7s linear infinite;
+}
+@keyframes shell-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .app[data-collapsed='true'] .sectionTitle {
   visibility: hidden;
+  min-height: 0;
   height: 8px;
   padding: 0;
 }
@@ -132,20 +150,64 @@
   justify-content: center;
   padding: 0;
 }
-.app[data-collapsed='true'] .navLabel,
-.app[data-collapsed='true'] .navCount {
+.app[data-collapsed='true'] .navLabel {
   display: none;
+}
+/* Collapsed, a count becomes a small badge on the icon's corner so "needs you" stays visible. */
+.app[data-collapsed='true'] .navItem {
+  position: relative;
+}
+.app[data-collapsed='true'] .navCount {
+  position: absolute;
+  top: 1px;
+  right: 6px;
+  min-width: 15px;
+  padding: 0 3px;
+  font-size: 10px;
+  line-height: 15px;
+  box-shadow: 0 0 0 2px var(--surface);
 }
 .sidebarFooter {
   flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
   padding: var(--s2);
   border-top: 1px solid var(--border);
 }
+.app[data-collapsed='true'] .sidebarFooter {
+  flex-direction: column;
+}
+.collapseToggle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--text-muted);
+  transition:
+    background var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+.collapseToggle:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.claudeText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .claudeStatus {
   display: flex;
+  flex: 1;
+  min-width: 0;
   align-items: center;
   gap: var(--s2);
-  width: 100%;
   padding: var(--s2);
   border: 0;
   border-radius: var(--r-sm);
@@ -166,7 +228,12 @@
 .app[data-collapsed='true'] .claudeStatus {
   justify-content: center;
 }
-.app[data-collapsed='true'] .claudeStatus span:not(.dot) {
+.app[data-collapsed='true'] .claudeStatus {
+  flex: none;
+  width: 30px;
+  padding: var(--s2) 0;
+}
+.app[data-collapsed='true'] .claudeText {
   display: none;
 }
 

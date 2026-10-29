@@ -104,7 +104,9 @@ nativeTheme.on('updated', () => {
 });
 
 if (!app.requestSingleInstanceLock()) {
-  app.quit();
+  // Another YANTRA (often the CLI's background one) is running and now shows its window.
+  // Exit at once: quit() would let Chromium try to open the profile caches the other one holds.
+  app.exit(0);
 } else {
   app.on('second-instance', () => showWindow());
 

@@ -29,7 +29,14 @@ const safeSet = (k: string, v: string) => {
   }
 };
 
-function applyConfig(config: AppConfig) {
+/** Re-reads config (projects added from the CLI) and the live sessions; the board refreshes itself. */
+export async function reloadConfig() {
+  const [cfg, sessions] = await Promise.all([api()['config:get'](), api()['sessions:summary']()]);
+  if (cfg.ok) applyConfig(cfg.config);
+  store.set({ sessions });
+}
+
+export function applyConfig(config: AppConfig) {
   const { route } = store.get();
   const known = config.projects.some((p) => p.slug === route.project);
   const project = known ? route.project : (config.projects.find((p) => p.slug === safeGet(LAST_PROJECT)) ?? config.projects[0])?.slug;

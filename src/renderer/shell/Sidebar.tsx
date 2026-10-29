@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react';
-import { Bell, CircleCheck, LayoutGrid, PanelLeftClose, PanelLeftOpen, Play, Plus, Settings, Sigma, type LucideIcon } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { Bell, CircleCheck, LayoutGrid, PanelLeftClose, PanelLeftOpen, Play, Plus, RefreshCw, Settings, Sigma, type LucideIcon } from 'lucide-react';
 import type { NeedsYou } from '@shared/sessions';
 import { IconButton, ProjectMark, Tooltip } from '../ui';
-import { navigate, setSidebarCollapsed } from '../actions';
+import { navigate, reloadConfig, setSidebarCollapsed } from '../actions';
 import { NO_PROJECTS, useStore, type View } from '../store';
 import { Logo } from './Logo';
 import s from './shell.module.css';
@@ -62,6 +62,7 @@ export function Sidebar() {
   const preflightRunning = useStore((s) => s.preflightRunning);
   const running = useStore((s) => s.sessions?.sessions.length ?? 0);
   const needs = useStore((s) => s.sessions?.needs ?? NO_NEEDS);
+  const [refreshing, setRefreshing] = useState(false);
 
   const claude = preflightRunning
     ? { color: 'var(--text-faint)', text: 'Checking Claude…' }
@@ -76,19 +77,23 @@ export function Sidebar() {
       <div className={`${s.brand} drag`}>
         <Logo />
         <span className={s.brandName}>YANTRA</span>
-        <IconButton
-          className={s.collapseButton}
-          icon={collapsed ? PanelLeftOpen : PanelLeftClose}
-          label="Collapse sidebar"
-          shortcut={['Ctrl', 'B']}
-          size="sm"
-          onClick={() => setSidebarCollapsed(!collapsed)}
-        />
       </div>
 
       <nav className={s.nav}>
         <div className={s.section}>
-          <div className={s.sectionTitle}>Projects</div>
+          <div className={s.sectionTitle}>
+            <span>Projects</span>
+            <IconButton
+              className={[s.sectionAction, refreshing && s.spinning].filter(Boolean).join(' ')}
+              icon={RefreshCw}
+              label="Refresh projects"
+              size="sm"
+              onClick={() => {
+                setRefreshing(true);
+                void reloadConfig().finally(() => setTimeout(() => setRefreshing(false), 400));
+              }}
+            />
+          </div>
           {projects.map((p) => (
             <NavItem
               key={p.slug}
@@ -129,10 +134,23 @@ export function Sidebar() {
       </nav>
 
       <div className={s.sidebarFooter}>
-        <button type="button" className={s.claudeStatus} onClick={() => navigate({ view: 'settings', section: 'general' })}>
-          <span className={s.dot} style={{ background: claude.color }} />
-          <span>{claude.text}</span>
-        </button>
+        <Tooltip content={claude.text} side="right">
+          <button type="button" className={s.claudeStatus} onClick={() => navigate({ view: 'settings', section: 'general' })}>
+            <span className={s.dot} style={{ background: claude.color }} />
+            <span className={s.claudeText}>{claude.text}</span>
+          </button>
+        </Tooltip>
+        <Tooltip content={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} shortcut={['Ctrl', 'B']} side="right">
+          <button
+            type="button"
+            className={s.collapseToggle}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-expanded={!collapsed}
+            onClick={() => setSidebarCollapsed(!collapsed)}
+          >
+            {collapsed ? <PanelLeftOpen size={16} aria-hidden /> : <PanelLeftClose size={16} aria-hidden />}
+          </button>
+        </Tooltip>
       </div>
     </aside>
   );

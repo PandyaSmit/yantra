@@ -17,11 +17,11 @@ import {
   type UniqueIdentifier,
 } from '@dnd-kit/core';
 import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { FileText, Lightbulb, MoreHorizontal, Plus, SearchX, Tags, X } from 'lucide-react';
+import { FileText, Lightbulb, MoreHorizontal, Plus, RefreshCw, SearchX, Tags, X } from 'lucide-react';
 import { checkMove, COLUMN_LABEL, COLUMNS, filterCards, isFiltering, LOCKED_REASON, NO_FILTERS, type Card, type ColumnKey } from '@shared/board';
 import type { Project } from '@shared/schemas';
 import { Button, EmptyState, IconButton, Kbd, Menu, MenuItem, Skeleton, Tooltip, useToast } from '../ui';
-import { errorMessage } from '../actions';
+import { errorMessage, reloadConfig } from '../actions';
 import { store, useStore } from '../store';
 import { Column } from './Column';
 import { FilterBar, useFilters } from './FilterBar';
@@ -65,6 +65,7 @@ export function Board() {
 function ProjectBoard({ project }: { project: Project }) {
   const toast = useToast();
   const { data, error, refresh } = useBoard(project.slug);
+  const [refreshing, setRefreshing] = useState(false);
   const [filters] = useFilters(project.slug);
   const openId = useStore((s) => s.route.issue);
   const [labelsOpen, setLabelsOpen] = useState(false);
@@ -210,6 +211,15 @@ function ProjectBoard({ project }: { project: Project }) {
           </div>
         </div>
         <div className={b.headerActions}>
+          <IconButton
+            icon={RefreshCw}
+            label="Refresh board"
+            className={refreshing ? b.spinning : undefined}
+            onClick={() => {
+              setRefreshing(true);
+              void Promise.all([refresh(), reloadConfig()]).finally(() => setTimeout(() => setRefreshing(false), 400));
+            }}
+          />
           <Menu trigger={<IconButton icon={MoreHorizontal} label="Board options" />}>
             <MenuItem icon={Tags} onSelect={() => setLabelsOpen(true)}>
               Manage labels

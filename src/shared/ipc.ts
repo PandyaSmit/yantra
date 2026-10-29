@@ -68,6 +68,8 @@ export type Res<C extends Channel> = IpcContract[C]['res'];
 /** Main → renderer push events. */
 export interface IpcEvents {
   'theme:changed': { resolved: 'light' | 'dark' };
+  /** config.json was saved (from the window or the CLI). */
+  'config:changed': AppConfig;
   /** Any change to a project's issues, labels, comments or attachments (including the renderer's own). */
   'board:changed': { projectSlug: string; issueId?: number };
   /** A task's row, stages or folder changed. */

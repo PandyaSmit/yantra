@@ -71,6 +71,7 @@ export function registerIpc(ctx: IpcContext): { shutdown(): void } {
   const save = (next: AppConfig): AppConfig => {
     const saved = saveConfig(configPath(), AppConfigSchema.parse(next));
     ctx.setConfig(saved);
+    ctx.window()?.webContents.send('config:changed', saved);
     return saved;
   };
 

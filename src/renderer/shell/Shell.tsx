@@ -1,5 +1,5 @@
 import { useCallback, useEffect, type ReactNode } from 'react';
-import { closeTask, navigate, openTaskById } from '../actions';
+import { applyConfig, closeTask, navigate, openTaskById } from '../actions';
 import { Board } from '../board/Board';
 import { TASK_TAB_KEYS, TaskWorkspace } from '../task/TaskWorkspace';
 import { FOCUS_SEARCH_EVENT } from '../board/FilterBar';
@@ -62,6 +62,7 @@ export function Shell() {
     void window.api.invoke['sessions:summary']().then((sessions) => store.set({ sessions }), () => {});
     const offs = [
       window.api.on('sessions:changed', (sessions) => store.set({ sessions })),
+      window.api.on('config:changed', applyConfig),
       window.api.on('notice:open', ({ taskId }) => void openTaskById(taskId)),
       window.api.on('notice', (n) => {
         const taskId = n.taskId;

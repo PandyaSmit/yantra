@@ -986,3 +986,12 @@
   align-items: center;
   justify-content: space-between;
 }
+
+.spinning svg {
+  animation: board-spin 0.7s linear infinite;
+}
+@keyframes board-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
