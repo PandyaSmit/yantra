@@ -2,6 +2,7 @@
 // channel, and window.api's type is derived from this file, so the three cannot drift apart.
 import type { BoardData, Card, CreateIssue, IssueDetail, IssueIndexEntry, LabelInfo, MoveIssue, UpdateIssue, UpsertLabel } from './board';
 import type { AppConfig, GeneralSettings, Price, Project } from './schemas';
+import type { LaunchResult, Notice, RunInfo, SessionsSummary } from './sessions';
 import type { FileContent, FileNode, TaskDetail, TaskProgress, TemplateError, TemplateInfo } from './tasks';
 import type { AppInfo, ConfigState, PreflightResult, RepoInfo } from './types';
 
@@ -31,6 +32,14 @@ export interface IpcContract {
   'tasks:removeResource': { req: { id: number; path: string }; res: void };
   'tasks:refreshIssue': { req: { id: number }; res: void };
   'tasks:reveal': { req: { id: number; what: 'folder' | 'worktree' | 'file'; path?: string }; res: void };
+  'sessions:start': { req: { taskId: number }; res: LaunchResult };
+  'sessions:launch': { req: { stageId: number }; res: LaunchResult };
+  'sessions:stop': { req: { stageId: number }; res: void };
+  'sessions:attach': { req: { runId: number }; res: { data: string; live: boolean } };
+  'sessions:runs': { req: { taskId: number }; res: RunInfo[] };
+  'sessions:summary': { req: void; res: SessionsSummary };
+  'pty:input': { req: { runId: number; data: string }; res: void };
+  'pty:resize': { req: { runId: number; cols: number; rows: number }; res: void };
   'app:info': { req: void; res: AppInfo };
   'config:get': { req: void; res: ConfigState };
   'config:setGeneral': { req: GeneralSettings; res: AppConfig };
@@ -60,6 +69,13 @@ export interface IpcEvents {
   'shortcut:closeTab': Record<string, never>;
   /** Output from the setup commands, as it arrives. */
   'task:log': { issueId: number; taskId: number; chunk: string };
+  /** PTY output for one run, batched every 16 ms. */
+  'pty:data': { runId: number; data: string };
+  'pty:exit': { runId: number; exitCode: number };
+  /** Live/queued sessions changed: the Running view, sidebar count and status bar refresh. */
+  'sessions:changed': SessionsSummary;
+  /** A toast from main: fence blocks, a stage ready for me, a trust-prompt exit. */
+  notice: Notice;
 }
 
 // Runtime list of channels for preload. `satisfies` makes the compiler reject a missing or extra name.
@@ -89,6 +105,14 @@ const channelMap = {
   'tasks:removeResource': true,
   'tasks:refreshIssue': true,
   'tasks:reveal': true,
+  'sessions:start': true,
+  'sessions:launch': true,
+  'sessions:stop': true,
+  'sessions:attach': true,
+  'sessions:runs': true,
+  'sessions:summary': true,
+  'pty:input': true,
+  'pty:resize': true,
   'app:info': true,
   'config:get': true,
   'config:setGeneral': true,

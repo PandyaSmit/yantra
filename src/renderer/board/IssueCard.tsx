@@ -3,7 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Archive, MessageSquare, Paperclip } from 'lucide-react';
 import type { Card, LabelInfo } from '@shared/board';
-import { Tag } from '../ui';
+import { Pill, STATUS_STYLE, Tag } from '../ui';
 import { openIssue } from '../actions';
 import { LabelChips } from './LabelPicker';
 import { PriorityIcon } from './Priority';
@@ -11,16 +11,32 @@ import b from './board.module.css';
 
 const TASK_LABEL = { draft: 'Draft', active: 'Active', ready_to_ship: 'Ready to ship', pushed: 'Pushed', done: 'Done' } as const;
 
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** "Code is running": the pill says the status, the tooltip names the stage. */
+const stageTitle = (stage: NonNullable<NonNullable<Card['task']>['stage']>) =>
+  `${capitalize(stage.key)}: ${STATUS_STYLE[stage.status].label.toLowerCase()}`;
+
 /** The card's content; used in the column and, while dragging, in the drag overlay. */
 export function CardView({ card, labels, overlay }: { card: Card; labels: LabelInfo[]; overlay?: boolean }) {
   return (
-    <div className={b.card} data-overlay={overlay || undefined} data-archived={card.archived || undefined}>
+    <div
+      className={b.card}
+      data-overlay={overlay || undefined}
+      data-archived={card.archived || undefined}
+      data-stage={card.task?.stage?.status}
+    >
       <div className={b.cardTop}>
         <span className={b.cardKey}>{card.key}</span>
         {card.priority > 0 && <PriorityIcon priority={card.priority} size={13} />}
         {card.task && (
           <span className={b.cardTask}>
-            <Tag tone={card.task.status === 'done' ? 'ok' : 'accent'}>{TASK_LABEL[card.task.status]}</Tag>
+            {card.task.stage ? (
+              <span title={stageTitle(card.task.stage)}>
+                <Pill status={card.task.stage.status} />
+              </span>
+            ) : (
+              <Tag tone={card.task.status === 'done' ? 'ok' : 'accent'}>{TASK_LABEL[card.task.status]}</Tag>
+            )}
           </span>
         )}
       </div>

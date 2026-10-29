@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Bell, CircleCheck, Play, Sigma, type LucideIcon } from 'lucide-react';
+import { Bell, CircleCheck, Sigma, type LucideIcon } from 'lucide-react';
 import { EmptyState } from '../ui';
 import v from './views.module.css';
 
@@ -18,16 +18,6 @@ function Page({ title, sub, icon, empty, hint }: { title: string; sub: string; i
     </div>
   );
 }
-
-export const RunningView = () => (
-  <Page
-    title="Running"
-    sub="Every live, queued or idle stage, across projects."
-    icon={Play}
-    empty="Nothing running"
-    hint="Stages appear here while Claude works on them. Start a task from a card on the board."
-  />
-);
 
 export const NeedsYouView = () => (
   <Page

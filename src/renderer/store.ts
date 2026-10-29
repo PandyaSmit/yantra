@@ -2,6 +2,7 @@
 import { useSyncExternalStore } from 'react';
 import type { BoardFilters } from '@shared/board';
 import type { AppConfig } from '@shared/schemas';
+import type { SessionsSummary } from '@shared/sessions';
 import type { AppInfo, PreflightResult, ResolvedTheme } from '@shared/types';
 
 export type View = 'board' | 'task' | 'running' | 'needs' | 'done' | 'metrics' | 'settings' | 'add-project' | 'devui';
@@ -47,6 +48,8 @@ export interface AppState {
   /** Task tabs, in strip order (kept across restarts in localStorage). */
   openTasks: OpenTask[];
   theme: ResolvedTheme;
+  /** Live and queued stage sessions, pushed by main on every change. */
+  sessions: SessionsSummary | null;
 }
 
 const initial: AppState = {
@@ -64,6 +67,7 @@ const initial: AppState = {
   filters: {},
   openTasks: [],
   theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+  sessions: null,
 };
 
 let state = initial;

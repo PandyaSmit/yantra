@@ -32,6 +32,8 @@ export interface LabelInfo {
 export interface TaskSummary {
   id: number;
   status: Exclude<TaskStatus, 'abandoned'>;
+  /** The stage that is queued, running, idle, waiting on me or interrupted, for the card's indicator. */
+  stage?: { key: string; status: 'queued' | 'running' | 'idle' | 'awaiting_approval' | 'interrupted' } | null;
 }
 
 export interface Card {

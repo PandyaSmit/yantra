@@ -107,7 +107,13 @@ export function openTask(task: OpenTask, opts: { tab?: TaskTab; file?: string } 
   });
 }
 
-/** Closes a task tab (the session, once there is one, keeps running). Focus moves to a neighbour or the board. */
+/** Opens a task tab knowing only its id (from a toast or the Running view). */
+export async function openTaskById(id: number, opts: { tab?: TaskTab } = {}) {
+  const t = await window.api.invoke['tasks:get']({ id });
+  openTask({ id: t.id, key: t.issueKey, title: t.title, projectSlug: t.projectSlug }, opts);
+}
+
+/** Closes a task tab (its session keeps running). Focus moves to a neighbour or the board. */
 export function closeTask(id: number) {
   const tabs = store.get().openTasks;
   const i = tabs.findIndex((t) => t.id === id);

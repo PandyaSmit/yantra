@@ -823,12 +823,12 @@ Throwaway code in `spike/`. Results in `docs/phase-0.md`, findings in `docs/cli-
 
 ### Phase 4: Sessions
 
-- [ ] `sessions.ts` PTY manager with ring buffer, launch/resume/stop/end, concurrency queue.
-- [ ] Settings file and policy file generation per launch; `hook.cjs` with the policy logic exported as a pure function and unit-tested against `fixtures/hooks/` (including the `PowerShell` tool, Windows paths and a BOM-prefixed payload).
-- [ ] `hooks.ts` tailer writing `event` rows and driving stage status, including `Stop` with running `background_tasks` and `<task-notification>` prompts; `board:changed` live updates.
-- [ ] Stop session handles the "Background work is running" exit dialog.
-- [ ] Terminal sub-tab themed from tokens; closing and reopening the tab keeps the session and redraws. Cards show running/interrupted indicators; Running view lists live sessions.
-- [ ] Acceptance: launch a stage by hand, watch it run, ask it to `git push` (blocked, toast shown), have it use a background subagent (stage stays `running` until the subagent's turn ends), quit the app mid-run, reopen: stage is `interrupted`, **Resume** continues the same session.
+- [x] `sessions.ts` PTY manager with ring buffer, launch/resume/stop/end, concurrency queue.
+- [x] Settings file and policy file generation per launch; `hook.cjs` with the policy logic exported as a pure function and unit-tested against `fixtures/hooks/` (including the `PowerShell` tool, Windows paths and a BOM-prefixed payload).
+- [x] `hooks.ts` tailer writing `event` rows and driving stage status, including `Stop` with running `background_tasks` and `<task-notification>` prompts; `board:changed` live updates.
+- [x] Stop session handles the "Background work is running" exit dialog.
+- [x] Terminal sub-tab themed from tokens; closing and reopening the tab keeps the session and redraws. Cards show running/interrupted indicators; Running view lists live sessions.
+- [x] Acceptance: launch a stage by hand, watch it run, ask it to `git push` (blocked, toast shown), have it use a background subagent (stage stays `running` until the subagent's turn ends), quit the app mid-run, reopen: stage is `interrupted`, **Resume** continues the same session.
 
 ### Phase 5: Pipeline
 

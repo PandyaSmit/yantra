@@ -28,6 +28,8 @@ export interface TaskEnv {
   changed(projectSlug: string, issueId: number, taskId: number): void;
   /** Override for tests; defaults to ~/.claude.json. */
   claudeJson?: string;
+  /** The live run of a stage, if its PTY is up (from sessions.ts). */
+  liveRun?(stageId: number): number | null;
 }
 
 interface TaskRow {
@@ -66,17 +68,32 @@ export function taskRef(db: Db, id: number) {
 const liveTaskOf = (db: Db, issueId: number) =>
   db.prepare("SELECT * FROM task WHERE issue_id = ? AND status <> 'abandoned'").get(issueId) as TaskRow | undefined;
 
-export async function getTask(env: Pick<TaskEnv, 'db' | 'lookup'>, id: number): Promise<TaskDetail> {
+export async function getTask(env: Pick<TaskEnv, 'db' | 'lookup' | 'liveRun'>, id: number): Promise<TaskDetail> {
   const row = taskRow(env.db, id);
   const project = env.lookup(row.project_slug);
   const titles = new Map(parseTemplate(row.template_yaml).stages.map((s) => [s.key, s.title]));
+  const lastRun = env.db.prepare('SELECT id, exit_code, exit_note, ended_at FROM run WHERE stage_id = ? ORDER BY id DESC LIMIT 1');
   const stages = (
-    env.db.prepare('SELECT stage_key, status, round FROM stage WHERE task_id = ? ORDER BY position').all(id) as {
+    env.db.prepare('SELECT id, stage_key, status, round, last_message FROM stage WHERE task_id = ? ORDER BY position').all(id) as {
+      id: number;
       stage_key: string;
       status: StageStatus;
       round: number;
+      last_message: string | null;
     }[]
-  ).map((s): StageInfo => ({ key: s.stage_key, title: titles.get(s.stage_key) ?? s.stage_key, status: s.status, round: s.round }));
+  ).map((s): StageInfo => {
+    const run = lastRun.get(s.id) as { id: number; exit_code: number | null; exit_note: string | null; ended_at: number | null } | undefined;
+    return {
+      id: s.id,
+      key: s.stage_key,
+      title: titles.get(s.stage_key) ?? s.stage_key,
+      status: s.status,
+      round: s.round,
+      lastMessage: s.last_message,
+      liveRunId: env.liveRun?.(s.id) ?? null,
+      lastRun: run ? { id: run.id, exitCode: run.exit_code, exitNote: run.exit_note, endedAt: run.ended_at } : null,
+    };
+  });
   const upstream = project.remote ? `${project.remote}/${project.defaultBranch}` : project.defaultBranch;
   return {
     id: row.id,

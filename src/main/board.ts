@@ -23,6 +23,7 @@ import {
   type MoveIssue,
   type Priority,
   type TaskStatus,
+  type TaskSummary,
   type UpdateIssue,
   type UpsertLabel,
 } from '@shared/board';
@@ -44,6 +45,7 @@ interface IssueRow {
   updated_at: number;
   task_id: number | null;
   task_status: TaskStatus | null;
+  task_stage: string | null;
   comment_count: number;
   attachment_count: number;
 }
@@ -51,14 +53,23 @@ interface IssueRow {
 // Each issue with its live task (at most one, by the partial unique index) and counts.
 const ISSUE_SELECT = `
   SELECT i.*, t.id AS task_id, t.status AS task_status,
+    (SELECT s.stage_key || ':' || s.status FROM stage s WHERE s.task_id = t.id
+       AND s.status IN ('queued', 'running', 'idle', 'awaiting_approval', 'interrupted') ORDER BY s.position LIMIT 1) AS task_stage,
     (SELECT COUNT(*) FROM issue_comment c WHERE c.issue_id = i.id) AS comment_count,
     (SELECT COUNT(*) FROM issue_attachment a WHERE a.issue_id = i.id) AS attachment_count
   FROM issue i
   LEFT JOIN task t ON t.issue_id = i.id AND t.status <> 'abandoned'`;
 
 // The join only matches live tasks, so a task here is never 'abandoned'.
-const liveTask = (row: IssueRow): Card['task'] =>
-  row.task_id !== null && row.task_status ? { id: row.task_id, status: row.task_status as NonNullable<Card['task']>['status'] } : null;
+const liveTask = (row: IssueRow): Card['task'] => {
+  if (row.task_id === null || !row.task_status) return null;
+  const task: TaskSummary = { id: row.task_id, status: row.task_status as TaskSummary['status'] };
+  if (row.task_stage) {
+    const [key, status] = row.task_stage.split(':') as [string, NonNullable<TaskSummary['stage']>['status']];
+    task.stage = { key, status };
+  }
+  return task;
+};
 
 function toCard(row: IssueRow, projectKey: string, labelIds: number[]): Card {
   const task = liveTask(row);

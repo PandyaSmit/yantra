@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ChartColumn,
+  Clock,
   Copy,
   FileDiff,
   FolderOpen,
@@ -11,17 +12,24 @@ import {
   MoreHorizontal,
   Play,
   RefreshCw,
+  RotateCcw,
+  ShieldQuestion,
+  Square,
   SquareTerminal,
   TriangleAlert,
   X,
+  type LucideIcon,
 } from 'lucide-react';
-import type { TaskDetail } from '@shared/tasks';
-import { Button, ConfirmDialog, EmptyState, IconButton, Menu, MenuItem, MenuSeparator, Skeleton, Tabs, Tag, Tooltip, useToast } from '../ui';
+import type { LaunchResult } from '@shared/sessions';
+import type { StageInfo, TaskDetail } from '@shared/tasks';
+import type { PreflightResult } from '@shared/types';
+import { Button, ConfirmDialog, EmptyState, IconButton, Menu, MenuItem, MenuSeparator, Skeleton, StatusIcon, Tabs, Tag, Tooltip, useToast } from '../ui';
 import { closeTask, errorMessage, navigate, updateOpenTask } from '../actions';
 import { StartTaskDialog, type StartTarget } from '../board/StartTaskDialog';
-import { useStore, type TaskTab } from '../store';
+import { store, useStore, type TaskTab } from '../store';
 import { Files } from './Files';
 import { StageRail } from './StageRail';
+import { TerminalTab } from './Terminal';
 import { useTask } from './useTask';
 import t from './task.module.css';
 
@@ -48,6 +56,11 @@ function Workspace({ id }: { id: number }) {
   const tab = useStore((s) => s.route.taskTab ?? 'files');
   const [abandoning, setAbandoning] = useState(false);
   const [finishing, setFinishing] = useState<StartTarget | null>(null);
+  const [stopping, setStopping] = useState(false);
+  const [launching, setLaunching] = useState(false);
+  /** The failed pre-flight from the last launch attempt, and what to retry once it passes. */
+  const [preflight, setPreflight] = useState<PreflightResult | null>(null);
+  const retry = useRef<(() => Promise<LaunchResult>) | null>(null);
 
   useEffect(() => {
     if (task) updateOpenTask({ id: task.id, key: task.issueKey, title: task.title, projectSlug: task.projectSlug });
@@ -90,6 +103,54 @@ function Workspace({ id }: { id: number }) {
   const copyBranch = () => void call(() => navigator.clipboard.writeText(task.branch), 'Could not copy', 'Branch name copied');
   const setupUnfinished = task.setupDoneAt === null && task.status === 'draft';
   const closed = task.status === 'abandoned' || task.status === 'done';
+  const current = task.stages.find((s) => s.status !== 'approved' && s.status !== 'skipped');
+  const trustExit = !!current && current.status === 'pending' && current.lastRun?.exitNote === 'trust_prompt';
+
+  /** Launch something; a failed pre-flight shows the banner instead of a toast. */
+  const launch = async (fn: () => Promise<LaunchResult>) => {
+    setLaunching(true);
+    try {
+      const r = await fn();
+      if (r.ok) {
+        setPreflight(null);
+        retry.current = null;
+        navigate({ taskTab: 'terminal' });
+      } else {
+        setPreflight(r.preflight);
+        retry.current = fn;
+      }
+    } catch (e) {
+      toast({ tone: 'error', title: 'Could not launch the stage', description: errorMessage(e) });
+    } finally {
+      setLaunching(false);
+    }
+  };
+  const checkAgain = async () => {
+    const r = await window.api.invoke['preflight:run']({});
+    store.set({ preflight: r });
+    if (!r.ok) return setPreflight(r);
+    setPreflight(null);
+    if (retry.current) await launch(retry.current);
+  };
+
+  const action = ((): { label: string; icon: LucideIcon; run?: () => void; disabled?: boolean; hint: string; secondary?: boolean } | null => {
+    if (closed || !current) return null;
+    if (task.status === 'draft')
+      return {
+        label: 'Start',
+        icon: Play,
+        disabled: task.creating || setupUnfinished,
+        hint: setupUnfinished ? 'Finish setup first' : `Launch ${current.title}. Write brief.md first; the stage reads it.`,
+        run: () => void launch(() => window.api.invoke['sessions:start']({ taskId: task.id })),
+      };
+    const launchIt = () => void launch(() => window.api.invoke['sessions:launch']({ stageId: current.id }));
+    if (current.status === 'interrupted') return { label: 'Resume', icon: RotateCcw, run: launchIt, hint: `Continue the same ${current.title} conversation` };
+    if (current.status === 'pending') return { label: `Launch ${current.title}`, icon: Play, run: launchIt, hint: `Start the ${current.title} stage` };
+    if (current.status === 'queued') return { label: 'Queued', icon: Clock, disabled: true, hint: 'Starts when a session slot frees' };
+    if (current.status === 'awaiting_approval' && current.liveRunId === null)
+      return { label: 'Reopen session', icon: SquareTerminal, run: launchIt, secondary: true, hint: 'Resume the conversation; Approve arrives with the pipeline (Phase 5)' };
+    return null;
+  })();
 
   const abandon = async (force = false) => {
     try {
@@ -116,14 +177,24 @@ function Workspace({ id }: { id: number }) {
           <span className={`${t.key} mono`}>{task.issueKey}</span>
           <h1 className={t.title}>{task.title}</h1>
           <div className={t.headerActions}>
-            <Tooltip content={task.status === 'draft' ? 'Running stages arrives with sessions (Phase 4). Write the brief first.' : 'Not available yet'}>
-              <span>
-                <Button variant="primary" icon={Play} disabled>
-                  Start
-                </Button>
-              </span>
-            </Tooltip>
+            {action && (
+              <Tooltip content={action.hint}>
+                <span>
+                  <Button variant={action.secondary ? 'secondary' : 'primary'} icon={action.icon} disabled={action.disabled || launching} onClick={action.run}>
+                    {action.label}
+                  </Button>
+                </span>
+              </Tooltip>
+            )}
             <Menu trigger={<IconButton icon={MoreHorizontal} label="Task actions" />}>
+              {current && (current.liveRunId !== null || current.status === 'queued') && (
+                <>
+                  <MenuItem icon={Square} onSelect={() => setStopping(true)}>
+                    {current.status === 'queued' ? 'Leave the queue' : current.status === 'running' ? 'Stop session…' : 'End session…'}
+                  </MenuItem>
+                  <MenuSeparator />
+                </>
+              )}
               <MenuItem icon={Copy} onSelect={copyBranch}>
                 Copy branch name
               </MenuItem>
@@ -185,8 +256,41 @@ function Workspace({ id }: { id: number }) {
             </Button>
           </div>
         ) : null}
+        {preflight && !preflight.ok && (
+          <div className={t.banner} data-tone="danger">
+            <TriangleAlert size={16} />
+            <span className={t.bannerText}>
+              <strong>Claude needs setup before a stage can run</strong>
+              <span>
+                {[preflight.binary, preflight.auth, preflight.onboarding].find((c) => !c.ok)?.detail}. Open a terminal, run <code className="mono">claude</code> once, pick a theme
+                and log in.
+              </span>
+            </span>
+            <Button size="sm" icon={RefreshCw} disabled={launching} onClick={() => void checkAgain()}>
+              Check again
+            </Button>
+          </div>
+        )}
+        {trustExit && (
+          <div className={t.banner} data-tone="danger">
+            <ShieldQuestion size={16} />
+            <span className={t.bannerText}>
+              <strong>Claude exited at the trust prompt</strong>
+              <span>Its default answer is "No, exit". Retry and choose "Yes, I trust this folder", or turn on "Trust new worktrees automatically" in Settings.</span>
+            </span>
+            <Button size="sm" icon={RotateCcw} disabled={launching} onClick={() => void launch(() => window.api.invoke['sessions:launch']({ stageId: current!.id }))}>
+              Retry
+            </Button>
+          </div>
+        )}
 
         <StageRail stages={task.stages} />
+        {current && statusLine(current) && (
+          <div className={t.status}>
+            <StatusIcon status={current.status} size={14} />
+            <span className={t.statusText}>{statusLine(current)}</span>
+          </div>
+        )}
       </div>
 
       <div className={t.subtabs}>
@@ -207,7 +311,7 @@ function Workspace({ id }: { id: number }) {
         {tab === 'files' ? (
           <Files task={task} />
         ) : tab === 'terminal' ? (
-          <EmptyState icon={SquareTerminal} title="No session yet" hint="When a stage runs, its Claude session appears here and you can type into it." />
+          <TerminalTab task={task} />
         ) : tab === 'diff' ? (
           <EmptyState icon={FileDiff} title="No changes yet" hint={`Commits on ${task.branch} since it branched show up here for review.`} />
         ) : (
@@ -224,9 +328,45 @@ function Workspace({ id }: { id: number }) {
         danger
         onConfirm={() => abandon()}
       />
+      {current && (
+        <ConfirmDialog
+          open={stopping}
+          onOpenChange={setStopping}
+          title={current.status === 'queued' ? `Take ${current.title} out of the queue?` : `${current.status === 'running' ? 'Stop' : 'End'} the ${current.title} session?`}
+          consequence={
+            current.status === 'queued'
+              ? "It won't start when a slot frees. You can launch it again later."
+              : 'Claude is asked to exit (and to stop any background work), and is closed after 5 seconds if it doesn\'t. Nothing is lost: Resume continues the same conversation.'
+          }
+          confirmLabel={current.status === 'queued' ? 'Leave the queue' : current.status === 'running' ? 'Stop session' : 'End session'}
+          danger={current.status === 'running'}
+          onConfirm={() => call(() => window.api.invoke['sessions:stop']({ stageId: current.id }), 'Could not stop the session')}
+        />
+      )}
       <StartTaskDialog card={finishing} resume onClose={() => setFinishing(null)} />
     </div>
   );
+}
+
+/** One line under the rail about the current stage. */
+function statusLine(s: StageInfo): string | null {
+  const last = s.lastMessage?.split('\n').find((l) => l.trim())?.trim();
+  const tail = last ? ` · “${last.length > 140 ? `${last.slice(0, 140)}…` : last}”` : '';
+  switch (s.status) {
+    case 'queued':
+      return `${s.title} is queued and starts when a session slot frees`;
+    case 'running':
+      return `${s.title} is running`; // the last message is from the previous turn; the terminal is live
+    case 'idle':
+      return `${s.title} is waiting for your next message in the terminal${tail}`;
+    case 'awaiting_approval':
+      return `${s.title} is ready for you${tail}`;
+    case 'interrupted':
+      if (s.lastRun?.exitNote === 'stopped') return `${s.title} was stopped. Resume continues the same conversation.`;
+      return `${s.title} was interrupted (the app quit or the session closed). Resume continues the same conversation.`;
+    default:
+      return null;
+  }
 }
 
 const cardFor = (task: TaskDetail): StartTarget => ({ id: task.issueId, projectSlug: task.projectSlug, key: task.issueKey, title: task.title });

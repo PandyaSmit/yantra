@@ -136,3 +136,15 @@ CREATE TABLE review_comment (
 export const SCHEMA_V2 = /* sql */ `
 ALTER TABLE task ADD COLUMN setup_done_at INTEGER;
 `;
+
+// Migration 3 (Phase 4): sessions.
+// - run.transcript_path: Claude's live transcript, from the SessionStart hook (run.transcript is the copy in log/).
+// - run.exit_note: why a run ended when that isn't obvious from the code ('trust_prompt', 'stopped').
+// - stage.last_message: the Stop hook's last_assistant_message, for the card and the rail.
+export const SCHEMA_V3 = /* sql */ `
+ALTER TABLE run ADD COLUMN transcript_path TEXT;
+ALTER TABLE run ADD COLUMN exit_note TEXT;
+ALTER TABLE stage ADD COLUMN last_message TEXT;
+CREATE INDEX event_run ON event(run_id);
+CREATE INDEX run_stage ON run(stage_id);
+`;

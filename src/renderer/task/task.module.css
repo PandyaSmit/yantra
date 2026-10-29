@@ -99,6 +99,74 @@
   flex: 1;
 }
 
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  padding-left: 36px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.statusText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.banner[data-tone='danger'] {
+  background: var(--danger-soft);
+}
+.banner[data-tone='danger'] > svg {
+  color: var(--danger);
+}
+.bannerText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.bannerText strong {
+  font-weight: var(--weight-semibold);
+}
+
+/* Terminal ------------------------------------------------------------------- */
+.terminalTab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  height: 100%;
+  min-height: 0;
+  padding: var(--s3) var(--s5) var(--s4);
+}
+.terminalBar {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-width: 0;
+}
+.runPicker {
+  width: auto;
+  max-width: 420px;
+}
+.terminalNote {
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+.terminal {
+  flex: 1;
+  min-height: 0;
+  padding: var(--s2) var(--s3);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--card);
+}
+.terminal :global(.xterm) {
+  height: 100%;
+}
+.terminal :global(.xterm-viewport) {
+  background: transparent !important;
+}
+
 /* Stage rail ----------------------------------------------------------------- */
 .rail {
   display: flex;

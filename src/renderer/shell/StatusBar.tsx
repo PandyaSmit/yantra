@@ -4,9 +4,11 @@ import { navigate } from '../actions';
 import { useStore } from '../store';
 import s from './shell.module.css';
 
-/** Live numbers arrive with sessions (Phase 4) and metrics (Phase 7); until then they read zero. */
+/** Live sessions come from main; tokens and agent time arrive with metrics (Phase 7) and read zero until then. */
 export function StatusBar() {
-  const max = useStore((s) => s.config?.maxConcurrentSessions ?? 3);
+  const max = useStore((s) => s.sessions?.max ?? s.config?.maxConcurrentSessions ?? 3);
+  const live = useStore((s) => s.sessions?.live ?? 0);
+  const queued = useStore((s) => s.sessions?.sessions.filter((x) => x.status === 'queued').length ?? 0);
   const version = useStore((s) => s.info?.version);
   const project = useStore((s) => s.config?.projects.find((p) => p.slug === s.route.project));
 
@@ -14,7 +16,9 @@ export function StatusBar() {
     <footer className={s.statusbar}>
       <Tooltip content="Open metrics" side="top">
         <button type="button" className={s.statusItem} onClick={() => navigate({ view: 'metrics' })}>
-          <Activity size={12} aria-hidden />0/{max} sessions live
+          <Activity size={12} aria-hidden color={live > 0 ? 'var(--running)' : undefined} />
+          {live}/{max} sessions live
+          {queued > 0 && <span className={s.sep}>· {queued} queued</span>}
         </button>
       </Tooltip>
       <span className={s.statusItem}>

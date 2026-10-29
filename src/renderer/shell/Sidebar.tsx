@@ -57,6 +57,7 @@ export function Sidebar() {
   const route = useStore((s) => s.route);
   const preflight = useStore((s) => s.preflight);
   const preflightRunning = useStore((s) => s.preflightRunning);
+  const running = useStore((s) => s.sessions?.sessions.length ?? 0);
 
   const claude = preflightRunning
     ? { color: 'var(--text-faint)', text: 'Checking Claude…' }
@@ -114,6 +115,7 @@ export function Sidebar() {
               onClick={() => navigate({ view })}
               collapsed={collapsed}
               shortcut={shortcut}
+              count={view === 'running' ? running : undefined}
             />
           ))}
         </div>

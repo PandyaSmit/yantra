@@ -74,6 +74,12 @@ export async function behindCount(dir: string, upstream: string): Promise<number
   return n === null ? null : Number(n);
 }
 
+/** Commits on `dir`'s HEAD since `base` (a stage's requireCommits gate). */
+export async function aheadCount(dir: string, base: string): Promise<number | null> {
+  const n = existsSync(dir) ? await git(dir, ['rev-list', '--count', `${base}..HEAD`]) : null;
+  return n === null ? null : Number(n);
+}
+
 /** Pick the default branch: the remote's HEAD, else the current branch, else main/master if present. */
 export function pickDefaultBranch(remoteHead: string | null, current: string | null, locals: string[]): string | null {
   if (remoteHead) return remoteHead.replace(/^[^/]+\//, '');

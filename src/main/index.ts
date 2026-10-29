@@ -7,6 +7,7 @@ import { loadConfig } from './config';
 import { openDb, type Db } from './db/db';
 import { registerIpc } from './ipc';
 import { configPath, dbPath } from './paths';
+import { markInterrupted } from './sessions';
 
 let configState: ConfigState;
 let db: Db | null = null;
@@ -27,6 +28,8 @@ function openDatabase(config: AppConfig): void {
   try {
     db = openDb(path);
     openedDbPath = path;
+    // No session survives a restart; stages that were live wait for Resume. Nothing auto-restarts.
+    markInterrupted(db);
   } catch (e) {
     configState = { ok: false, path, error: 'Could not open the YANTRA database', issues: [(e as Error).message] };
   }
@@ -96,7 +99,7 @@ if (!app.requestSingleInstanceLock()) {
       nativeTheme.themeSource = configState.config.theme;
       openDatabase(configState.config);
     }
-    registerIpc({
+    const ipc = registerIpc({
       config: () => configState,
       setConfig: (config) => (configState = { ok: true, config }),
       db: () => db,
@@ -105,6 +108,8 @@ if (!app.requestSingleInstanceLock()) {
       resourcesDir: () => join(app.getAppPath(), 'resources'),
     });
     createWindow();
+    // Quitting kills every stage PTY (claude would otherwise linger); they show as interrupted next time.
+    app.on('before-quit', () => ipc.shutdown());
   });
 
   app.on('window-all-closed', () => {

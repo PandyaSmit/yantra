@@ -1,8 +1,11 @@
 // Every ipcMain.handle registration lives here. Payloads are validated with zod before use.
 import { existsSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { app, dialog, ipcMain, nativeTheme, shell, type BrowserWindow } from 'electron';
+import { spawn as ptySpawn } from 'node-pty';
 import { z } from 'zod';
+import type { Notice } from '@shared/sessions';
+import type { PreflightResult } from '@shared/types';
 import { IPC_ERROR_PREFIX, type Channel, type IpcEvents, type Req, type Res } from '@shared/ipc';
 import { AppConfigSchema, GeneralSettingsSchema, PriceTableSchema, ProjectSchema, type AppConfig, type Project } from '@shared/schemas';
 import type { ConfigState } from '@shared/types';
@@ -11,7 +14,10 @@ import { saveConfig } from './config';
 import type { Db } from './db/db';
 import { inspectRepo } from './git';
 import { configPath, yantraHome } from './paths';
-import { runPreflight } from './preflight';
+import { applyHookLine, HookTailer } from './hooks';
+import { writeHookWrapper } from './launch';
+import { findOnPath, runPreflight } from './preflight';
+import { artifactReady, copyTranscript, Sessions } from './sessions';
 import * as taskfs from './taskfs';
 import * as tasks from './tasks';
 import type { TaskEnv } from './tasks';
@@ -39,7 +45,7 @@ function handle<C extends Channel>(channel: C, fn: (req: Req<C>) => Promise<Res<
   });
 }
 
-export function registerIpc(ctx: IpcContext): void {
+export function registerIpc(ctx: IpcContext): { shutdown(): void } {
   const requireConfig = (): AppConfig => {
     const state = ctx.config();
     if (!state.ok) throw new Error('config.json is invalid; fix it and restart YANTRA');
@@ -122,8 +128,99 @@ export function registerIpc(ctx: IpcContext): void {
   });
 
   const board = boardContext(ctx, requireConfig);
+  const sessions = sessionContext(ctx, board, requireConfig);
   registerBoardIpc(board, requireConfig);
-  registerTaskIpc(ctx, board, requireConfig);
+  registerTaskIpc(ctx, board, requireConfig, sessions);
+  registerSessionIpc(sessions);
+  return { shutdown: () => sessions.shutdown() };
+}
+
+type SessionContext = ReturnType<typeof sessionContext>;
+
+/** The one Sessions manager and hook tailer, created on first use (the database may open later). */
+function sessionContext(ctx: IpcContext, { db, lookup }: BoardContext, requireConfig: () => AppConfig) {
+  const send = <E extends keyof IpcEvents>(event: E, payload: IpcEvents[E]) => ctx.window()?.webContents.send(event, payload);
+  let mgr: Sessions | null = null;
+  let tailer: HookTailer | null = null;
+  // Pre-flight runs before the first launch and is cached once it passes; a failure is re-checked every time.
+  let preflightOk: PreflightResult | null = null;
+  const changed = (taskId: number) => {
+    const ref = tasks.taskRef(db(), taskId);
+    ctx.window()?.webContents.send('board:changed', { projectSlug: ref.projectSlug, issueId: ref.issueId });
+    send('task:changed', ref);
+  };
+  const get = (): Sessions => {
+    if (mgr) return mgr;
+    const notify = (n: Notice) => send('notice', n);
+    tailer = new HookTailer(
+      (_file, line) =>
+        applyHookLine(
+          {
+            db: db(),
+            artifactReady: (stageId) => artifactReady(db(), stageId),
+            notify,
+            changed: (taskId) => {
+              changed(taskId);
+              send('sessions:changed', get().summary());
+            },
+            sessionEnded: (runId, path) => {
+              try {
+                copyTranscript(db(), runId, path);
+              } catch (e) {
+                console.error('Could not copy the transcript', e);
+              }
+            },
+          },
+          line,
+        ),
+      (e) => console.error('[hooks]', e),
+    );
+    const resources = ctx.resourcesDir();
+    mgr = new Sessions({
+      db: db(),
+      lookup,
+      claudeBinary: () => {
+        const bin = requireConfig().claudeBinary;
+        return isAbsolute(bin) || /[\\/]/.test(bin) ? bin : (findOnPath(bin) ?? bin);
+      },
+      maxSessions: () => requireConfig().maxConcurrentSessions,
+      preflight: async () => {
+        if (preflightOk) return preflightOk;
+        const r = await runPreflight(requireConfig().claudeBinary);
+        if (r.ok) preflightOk = r;
+        return r;
+      },
+      hookWrapper: writeHookWrapper(join(yantraHome(), 'bin'), process.execPath, join(resources, 'hook.cjs')),
+      promptDirs: [yantraHome(), resources],
+      tailer,
+      spawn: (file, args, o) => ptySpawn(file, args, { name: 'xterm-256color', cwd: o.cwd, env: o.env, cols: o.cols, rows: o.rows }),
+      data: (runId, data) => send('pty:data', { runId, data }),
+      exited: (runId, exitCode) => send('pty:exit', { runId, exitCode }),
+      changed,
+      sessionsChanged: () => send('sessions:changed', get().summary()),
+      notify,
+    });
+    return mgr;
+  };
+  return {
+    get,
+    liveRun: (stageId: number) => mgr?.liveRunOf(stageId) ?? null,
+    shutdown: () => {
+      mgr?.killAll();
+      void tailer?.close();
+    },
+  };
+}
+
+function registerSessionIpc(sessions: SessionContext): void {
+  handle('sessions:start', ({ taskId }) => sessions.get().startTask(idOf(taskId)));
+  handle('sessions:launch', ({ stageId }) => sessions.get().launch(idOf(stageId)));
+  handle('sessions:stop', ({ stageId }) => sessions.get().stop(idOf(stageId)));
+  handle('sessions:attach', ({ runId }) => sessions.get().attach(idOf(runId)));
+  handle('sessions:runs', ({ taskId }) => sessions.get().runs(idOf(taskId)));
+  handle('sessions:summary', () => sessions.get().summary());
+  handle('pty:input', ({ runId, data }) => sessions.get().input(idOf(runId), z.string().parse(data)));
+  handle('pty:resize', ({ runId, cols, rows }) => sessions.get().resize(idOf(runId), z.number().parse(cols), z.number().parse(rows)));
 }
 
 type BoardContext = ReturnType<typeof boardContext>;
@@ -147,7 +244,7 @@ function boardContext(ctx: IpcContext, requireConfig: () => AppConfig) {
 
 const idOf = (v: unknown) => z.number().int().positive().parse(v);
 
-function registerTaskIpc(ctx: IpcContext, { db, lookup, dataRoot, changed }: BoardContext, requireConfig: () => AppConfig): void {
+function registerTaskIpc(ctx: IpcContext, { db, lookup, dataRoot, changed }: BoardContext, requireConfig: () => AppConfig, sessions: SessionContext): void {
   const send = <E extends keyof IpcEvents>(event: E, payload: IpcEvents[E]) => ctx.window()?.webContents.send(event, payload);
   const loadAll = () => loadTemplates([join(ctx.resourcesDir(), 'templates'), join(yantraHome(), 'templates')]);
   const env = (): TaskEnv => ({
@@ -156,6 +253,7 @@ function registerTaskIpc(ctx: IpcContext, { db, lookup, dataRoot, changed }: Boa
     dataRoot: dataRoot(),
     templates: () => loadAll().templates,
     trustWorktrees: () => requireConfig().trustWorktrees,
+    liveRun: sessions.liveRun,
     progress: (p) => send('task:progress', p),
     log: (issueId, taskId, chunk) => send('task:log', { issueId, taskId, chunk }),
     changed: (projectSlug, issueId, taskId) => {

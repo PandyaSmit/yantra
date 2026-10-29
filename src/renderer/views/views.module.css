@@ -495,6 +495,58 @@
   width: 32px;
 }
 
+/* Running ------------------------------------------------------------------ */
+.sessionList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sessionList li + li {
+  border-top: 1px solid var(--border);
+}
+.sessionRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  padding: var(--s3) var(--s4);
+  border: 0;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+.sessionRow:hover {
+  background: var(--hover);
+}
+.sessionRow:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.sessionKey {
+  flex: none;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.sessionMain {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.sessionTitle {
+  overflow: hidden;
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sessionMeta {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* DevUi -------------------------------------------------------------------- */
 .devGrid {
   display: grid;

@@ -50,10 +50,17 @@ export interface TemplateError {
 // Tasks --------------------------------------------------------------------
 
 export interface StageInfo {
+  id: number;
   key: string;
   title: string;
   status: StageStatus;
   round: number;
+  /** The Stop hook's last_assistant_message. */
+  lastMessage: string | null;
+  /** The run whose PTY is alive now, or null. */
+  liveRunId: number | null;
+  /** The newest run, live or ended. exitNote 'trust_prompt' shows the trust banner. */
+  lastRun: { id: number; exitCode: number | null; exitNote: string | null; endedAt: number | null } | null;
 }
 
 export interface TaskDetail {

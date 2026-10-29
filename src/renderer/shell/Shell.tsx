@@ -1,14 +1,15 @@
 import { useCallback, useEffect, type ReactNode } from 'react';
-import { closeTask, navigate } from '../actions';
+import { closeTask, navigate, openTaskById } from '../actions';
 import { Board } from '../board/Board';
 import { TASK_TAB_KEYS, TaskWorkspace } from '../task/TaskWorkspace';
 import { FOCUS_SEARCH_EVENT } from '../board/FilterBar';
-import { Dialog, Kbd } from '../ui';
+import { Dialog, Kbd, useToast } from '../ui';
 import { SHORTCUTS, useGlobalShortcuts } from '../lib/hooks';
 import { store, useStore, type View } from '../store';
 import { AddProject } from '../views/AddProject';
 import { DevUi } from '../views/DevUi';
-import { DoneView, MetricsView, NeedsYouView, RunningView } from '../views/Placeholders';
+import { DoneView, MetricsView, NeedsYouView } from '../views/Placeholders';
+import { RunningView } from '../views/Running';
 import { Settings } from '../views/Settings';
 import { CommandPalette } from './CommandPalette';
 import { Sidebar } from './Sidebar';
@@ -54,6 +55,26 @@ export function Shell() {
       off();
     };
   }, []);
+
+  // Live sessions (Running view, sidebar count, status bar) and main's toasts.
+  const toast = useToast();
+  useEffect(() => {
+    void window.api.invoke['sessions:summary']().then((sessions) => store.set({ sessions }), () => {});
+    const offs = [
+      window.api.on('sessions:changed', (sessions) => store.set({ sessions })),
+      window.api.on('notice', (n) => {
+        const taskId = n.taskId;
+        const viewing = store.get().route.view === 'task' && store.get().route.task === taskId;
+        toast({
+          tone: n.tone,
+          title: n.title,
+          description: n.description,
+          ...(taskId !== undefined && !viewing ? { action: { label: 'Open task', onClick: () => void openTaskById(taskId, { tab: 'terminal' }) } } : {}),
+        });
+      }),
+    ];
+    return () => offs.forEach((off) => off());
+  }, [toast]);
 
   const onLetter = useCallback((k: string) => {
     const { route, newIssue } = store.get();
