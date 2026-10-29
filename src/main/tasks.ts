@@ -296,19 +296,21 @@ export function refreshIssueSnapshot(env: Pick<TaskEnv, 'db' | 'lookup' | 'dataR
 }
 
 /**
- * Abandons a draft task: removes its worktree (git refuses if it has changes, unless `force`),
- * keeps the branch and the task folder as history, and puts the issue back at the end of Todo.
- * Abandoning a task that has run stages is Phase 6 (it also has to stop sessions).
+ * Abandons a task: ends its sessions, removes its worktree (git refuses if it has changes, unless
+ * `force`), keeps the branch and the task folder as history, and puts the issue back at the end of Todo.
+ * Nothing is pushed.
  */
-export async function abandonDraft(env: TaskEnv, id: number, force = false): Promise<void> {
+export async function abandonDraft(env: TaskEnv, id: number, force = false, stopSessions?: () => Promise<void>): Promise<void> {
   const row = taskRow(env.db, id);
-  if (row.status !== 'draft') throw new Error('Only a draft task can be abandoned for now');
+  if (row.status === 'done' || row.status === 'abandoned') throw new Error(`A ${row.status} task can't be abandoned`);
   if (inflight.has(row.issue_id)) throw new Error('Wait for setup to finish first');
+  await stopSessions?.();
   const project = env.lookup(row.project_slug);
   if ((await currentBranch(row.worktree_path)) === row.branch) await removeWorktree(project.repoPath, row.worktree_path, force);
   const now = Date.now();
   env.db.transaction(() => {
     env.db.prepare("UPDATE task SET status = 'abandoned', closed_at = ? WHERE id = ?").run(now, id);
+    env.db.prepare("UPDATE stage SET status = 'interrupted' WHERE task_id = ? AND status IN ('queued', 'running', 'idle')").run(id);
     // Back to the end of Todo, where deriveColumn puts an issue whose task was abandoned.
     const last = env.db
       .prepare("SELECT MAX(position) AS p FROM issue WHERE project_slug = ? AND column_key = 'todo' AND id <> ?")

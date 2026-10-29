@@ -1,6 +1,7 @@
 // The one IPC contract. Main registers a handler per channel, preload exposes one function per
 // channel, and window.api's type is derived from this file, so the three cannot drift apart.
 import type { BoardData, Card, CreateIssue, IssueDetail, IssueIndexEntry, LabelInfo, MoveIssue, UpdateIssue, UpsertLabel } from './board';
+import type { MetricsOverview, TaskDiff, TaskMetrics } from './metrics';
 import type { AppConfig, GeneralSettings, Price, Project } from './schemas';
 import type { LaunchResult, Notice, RunInfo, SessionsSummary } from './sessions';
 import type { FileContent, FileNode, PipelineAction, TaskDetail, TaskProgress, TemplateError, TemplateInfo } from './tasks';
@@ -39,6 +40,13 @@ export interface IpcContract {
   'sessions:runs': { req: { taskId: number }; res: RunInfo[] };
   'sessions:summary': { req: void; res: SessionsSummary };
   'pipeline:act': { req: { taskId: number; action: PipelineAction }; res: LaunchResult };
+  'review:diff': { req: { taskId: number; sha?: string }; res: TaskDiff };
+  'ship:pr': { req: { taskId: number }; res: string };
+  'ship:savePr': { req: { taskId: number; text: string }; res: void };
+  'ship:push': { req: { taskId: number; force: boolean }; res: { ok: boolean; output: string } };
+  'tasks:finish': { req: { id: number; force?: boolean }; res: void };
+  'metrics:task': { req: { taskId: number }; res: TaskMetrics };
+  'metrics:overview': { req: void; res: MetricsOverview };
   'pty:input': { req: { runId: number; data: string }; res: void };
   'pty:resize': { req: { runId: number; cols: number; rows: number }; res: void };
   'app:info': { req: void; res: AppInfo };
@@ -115,6 +123,13 @@ const channelMap = {
   'sessions:runs': true,
   'sessions:summary': true,
   'pipeline:act': true,
+  'review:diff': true,
+  'ship:pr': true,
+  'ship:savePr': true,
+  'ship:push': true,
+  'tasks:finish': true,
+  'metrics:task': true,
+  'metrics:overview': true,
   'pty:input': true,
   'pty:resize': true,
   'app:info': true,

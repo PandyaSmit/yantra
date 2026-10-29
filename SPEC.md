@@ -842,17 +842,17 @@ Throwaway code in `spike/`. Results in `docs/phase-0.md`, findings in `docs/cli-
 
 ### Phase 6: Review and ship (local)
 
-- [ ] Diff sub-tab (base...HEAD), commit list, file tree, line comments, review.md findings panel.
-- [ ] Send back to Code with `feedback/code-round-N.md`.
-- [ ] Ship panel: generated, editable PR description saved to `pr.md`; separate Push branch, Force push, Copy PR description, Copy branch name.
-- [ ] Mark done with cleanup and `manifest.json`; Abandon returns the issue to Todo.
-- [ ] Acceptance: the branch appears on the throwaway `origin` with the task's commits; `pr.md` reads well; a grep test fails if the codebase contains `git merge`, `git rebase`, `/merge`, `auto_merge` or `merge_when_pipeline_succeeds` outside the hook deny lists.
+- [x] Diff sub-tab (base...HEAD), commit list, file tree, line comments, review.md findings panel.
+- [x] Send back to Code with `feedback/code-round-N.md`.
+- [x] Ship panel: generated, editable PR description saved to `pr.md`; separate Push branch, Force push, Copy PR description, Copy branch name.
+- [x] Mark done with cleanup and `manifest.json`; Abandon returns the issue to Todo.
+- [x] Acceptance: the branch appears on the throwaway `origin` with the task's commits; `pr.md` reads well; a grep test fails if the codebase contains `git merge`, `git rebase`, `/merge`, `auto_merge` or `merge_when_pipeline_succeeds` outside the hook deny lists.
 
 ### Phase 7: Metrics
 
-- [ ] Incremental transcript parser for the main file plus `subagents/*.jsonl`, dedupe by `message.id`, skipping `<synthetic>`, tested on `fixtures/transcripts/` (expected: 736 main output tokens, 166 subagent).
-- [ ] Three clocks, Metrics sub-tab, live status bar totals, global Metrics view and Done view.
-- [ ] Acceptance: token totals for a finished task match a manual sum of unique message ids in its transcripts.
+- [x] Incremental transcript parser for the main file plus `subagents/*.jsonl`, dedupe by `message.id`, skipping `<synthetic>`, tested on `fixtures/transcripts/` (expected: 736 main output tokens, 166 subagent).
+- [x] Three clocks, Metrics sub-tab, live status bar totals, global Metrics view and Done view.
+- [x] Acceptance: token totals for a finished task match a manual sum of unique message ids in its transcripts.
 
 ### Later (not MVP)
 

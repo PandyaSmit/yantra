@@ -234,6 +234,139 @@ button.railNode:hover {
   background: var(--needs-you);
 }
 
+/* Diff, ship and metrics ---------------------------------------------------------- */
+.review {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.reviewBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.reviewSide {
+  flex: none;
+  width: 260px;
+  overflow: auto;
+  padding: var(--s3) var(--s2);
+  border-right: 1px solid var(--border);
+}
+a.treeItem {
+  color: inherit;
+  text-decoration: none;
+}
+.plus {
+  color: var(--ok);
+  font-size: var(--text-xs);
+}
+.minus {
+  color: var(--danger);
+  font-size: var(--text-xs);
+}
+.diff {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: var(--s3) 0;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+}
+.diff > div {
+  padding: 0 var(--s4);
+  white-space: pre;
+}
+.diff > div[data-kind='add'] {
+  background: var(--ok-soft);
+}
+.diff > div[data-kind='del'] {
+  background: var(--danger-soft);
+}
+.diff > div[data-kind='hunk'] {
+  color: var(--accent);
+}
+.diff > div[data-kind='file'] {
+  margin-top: var(--s3);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--border);
+  font-weight: var(--weight-semibold);
+}
+.ship {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3) var(--s5);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.shipHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+.shipInput {
+  height: 140px;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  resize: vertical;
+}
+.shipOutput {
+  max-height: 120px;
+  margin: 0;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.metrics {
+  padding: var(--s4) var(--s5);
+  overflow: auto;
+}
+.clocks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s5);
+  margin-bottom: var(--s4);
+  font-size: var(--text-sm);
+}
+.metricsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.metricsTable th,
+.metricsTable td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+}
+.metricsTable th:first-child,
+.metricsTable td:first-child {
+  text-align: left;
+}
+.metricsTable th {
+  color: var(--text-muted);
+  font-weight: var(--weight-medium);
+}
+.transcripts {
+  margin-top: var(--s4);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.linkButton {
+  margin-right: var(--s2);
+  border: 0;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: var(--text-xs);
+}
+
 /* Feedback dialog -------------------------------------------------------------- */
 .feedback {
   display: flex;

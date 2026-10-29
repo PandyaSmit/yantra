@@ -124,6 +124,7 @@ function eventSummary(line: HookLine): string | null {
   if (line.event === 'SessionStart') return line.source ?? null;
   if (line.event === 'SessionEnd') return line.endReason ?? null;
   if (line.event === 'UserPromptSubmit') return line.notification ? 'task-notification' : null;
+  if (line.event === 'Stop' && line.agentId) return 'subagent'; // metrics: doesn't end the stage's turn
   if (line.blocked && line.reason) return `${line.summary ?? ''} — ${line.reason}`.slice(0, 600);
   return line.summary || null;
 }

@@ -27,6 +27,7 @@ import {
 import type { LaunchResult } from '@shared/sessions';
 import type { PipelineAction, StageInfo, TaskDetail } from '@shared/tasks';
 import { FeedbackDialog, type FeedbackMode } from './FeedbackDialog';
+import { DiffTab, MetricsTab } from './Review';
 import type { PreflightResult } from '@shared/types';
 import { Button, ConfirmDialog, EmptyState, IconButton, Menu, MenuItem, MenuSeparator, Skeleton, StatusIcon, Tabs, Tag, Tooltip, useToast } from '../ui';
 import { closeTask, errorMessage, navigate, updateOpenTask } from '../actions';
@@ -194,14 +195,14 @@ function Workspace({ id }: { id: number }) {
   const abandon = async (force = false) => {
     try {
       await window.api.invoke['tasks:abandon']({ id: task.id, force });
-      toast({ tone: 'success', title: `${task.issueKey} draft abandoned`, description: 'The issue is back in Todo. Branch and task folder are kept.' });
+      toast({ tone: 'success', title: `${task.issueKey} abandoned`, description: 'The issue is back in Todo. Branch and task folder are kept.' });
       closeTask(task.id);
     } catch (e) {
       const message = errorMessage(e);
       const dirty = /modified or untracked|contains modified|untracked files/i.test(message);
       toast({
         tone: 'error',
-        title: 'Could not abandon the draft',
+        title: 'Could not abandon the task',
         description: dirty ? 'The worktree has changes git would lose.' : message,
         ...(dirty ? { action: { label: 'Remove anyway', onClick: () => void abandon(true) } } : {}),
       });
@@ -276,11 +277,11 @@ function Workspace({ id }: { id: number }) {
               >
                 Refresh issue.md from board
               </MenuItem>
-              {task.status === 'draft' && (
+              {can('abandon') && (
                 <>
                   <MenuSeparator />
                   <MenuItem icon={X} danger disabled={task.creating} onSelect={() => setAbandoning(true)}>
-                    Abandon draft…
+                    Abandon task…
                   </MenuItem>
                 </>
               )}
@@ -380,18 +381,18 @@ function Workspace({ id }: { id: number }) {
         ) : tab === 'terminal' ? (
           <TerminalTab task={task} />
         ) : tab === 'diff' ? (
-          <EmptyState icon={FileDiff} title="No changes yet" hint={`Commits on ${task.branch} since it branched show up here for review.`} />
+          <DiffTab task={task} />
         ) : (
-          <EmptyState icon={ChartColumn} title="No metrics yet" hint="Tokens, agent time and waiting-on-you time per stage, once stages run." />
+          <MetricsTab task={task} />
         )}
       </div>
 
       <ConfirmDialog
         open={abandoning}
         onOpenChange={setAbandoning}
-        title={`Abandon the ${task.issueKey} draft?`}
-        consequence="The worktree is removed (git refuses if it has changes). The branch and task folder stay as history, and the issue goes back to Todo."
-        confirmLabel="Abandon draft"
+        title={`Abandon ${task.issueKey}?`}
+        consequence="Live sessions end and the worktree is removed (git refuses if it has changes). The branch and task folder stay as history, and the issue goes back to Todo."
+        confirmLabel="Abandon task"
         danger
         onConfirm={() => abandon()}
       />

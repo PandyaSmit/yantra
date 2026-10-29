@@ -16,7 +16,9 @@ import { inspectRepo } from './git';
 import { configPath, yantraHome } from './paths';
 import { applyHookLine, HookTailer } from './hooks';
 import { writeHookWrapper } from './launch';
+import * as metrics from './metrics';
 import * as pipeline from './pipeline';
+import * as review from './review';
 import { findOnPath, runPreflight } from './preflight';
 import { artifactReady, copyTranscript, Sessions } from './sessions';
 import * as taskfs from './taskfs';
@@ -132,7 +134,7 @@ export function registerIpc(ctx: IpcContext): { shutdown(): void } {
   const sessions = sessionContext(ctx, board, requireConfig);
   registerBoardIpc(board, requireConfig);
   registerTaskIpc(ctx, board, requireConfig, sessions);
-  registerSessionIpc(sessions, board);
+  registerSessionIpc(sessions, board, requireConfig);
   return { shutdown: () => sessions.shutdown() };
 }
 
@@ -167,8 +169,8 @@ function sessionContext(ctx: IpcContext, { db, lookup }: BoardContext, requireCo
       note.show();
     };
     tailer = new HookTailer(
-      (_file, line) =>
-        applyHookLine(
+      async (_file, line) => {
+        await applyHookLine(
           {
             db: db(),
             artifactReady: (stageId) => artifactReady(db(), stageId),
@@ -186,7 +188,16 @@ function sessionContext(ctx: IpcContext, { db, lookup }: BoardContext, requireCo
             },
           },
           line,
-        ),
+        );
+        // Live token numbers after every turn.
+        if (line.runId !== null && (line.event === 'Stop' || line.event === 'SessionEnd')) {
+          try {
+            metrics.ingestRun(db(), line.runId);
+          } catch (e) {
+            console.error('Could not read the transcript usage', e);
+          }
+        }
+      },
       (e) => console.error('[hooks]', e),
     );
     const resources = ctx.resourcesDir();
@@ -238,7 +249,22 @@ const PipelineActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('skip'), stageKey: z.string().min(1) }),
 ]);
 
-function registerSessionIpc(sessions: SessionContext, { db, lookup }: BoardContext): void {
+function registerSessionIpc(sessions: SessionContext, { db, lookup }: BoardContext, requireConfig: () => AppConfig): void {
+  const ping = (taskId: number) => sessions.changed(taskId);
+  handle('review:diff', ({ taskId, sha }) => review.taskDiff(db(), idOf(taskId), sha === undefined ? undefined : z.string().regex(/^[0-9a-f]{4,40}$/).parse(sha)));
+  handle('ship:pr', ({ taskId }) => review.prDraft(db(), idOf(taskId)));
+  handle('ship:savePr', ({ taskId, text }) => review.savePr(db(), idOf(taskId), z.string().parse(text)));
+  handle('ship:push', async ({ taskId, force }) => {
+    const r = await review.push(db(), lookup, idOf(taskId), force === true);
+    ping(idOf(taskId));
+    return r;
+  });
+  handle('tasks:finish', async ({ id, force }) => {
+    await review.finish(db(), lookup, idOf(id), force === true);
+    ping(idOf(id));
+  });
+  handle('metrics:task', ({ taskId }) => metrics.taskMetrics(db(), requireConfig().priceTable, idOf(taskId)));
+  handle('metrics:overview', () => metrics.overview(db(), requireConfig().priceTable));
   handle('pipeline:act', ({ taskId, action }) =>
     pipeline.act({ db: db(), lookup, sessions: sessions.get(), changed: sessions.changed }, idOf(taskId), PipelineActionSchema.parse(action)),
   );
@@ -300,7 +326,12 @@ function registerTaskIpc(ctx: IpcContext, { db, lookup, dataRoot, changed }: Boa
   });
   handle('tasks:create', ({ issueId, template }) => tasks.createTask(env(), { issueId: idOf(issueId), template: z.string().min(1).parse(template) }));
   handle('tasks:get', ({ id }) => tasks.getTask(env(), idOf(id)));
-  handle('tasks:abandon', ({ id, force }) => tasks.abandonDraft(env(), idOf(id), force === true));
+  handle('tasks:abandon', ({ id, force }) =>
+    tasks.abandonDraft(env(), idOf(id), force === true, async () => {
+      const stages = db().prepare('SELECT id FROM stage WHERE task_id = ?').all(idOf(id)) as { id: number }[];
+      for (const s of stages) await sessions.get().stopAndWait(s.id);
+    }),
+  );
   handle('tasks:files', ({ id }) => taskfs.listTree(dirOf(id)));
   handle('tasks:readFile', ({ id, path: p }) => taskfs.readTaskFile(dirOf(id), path.parse(p)));
   handle('tasks:writeFile', ({ id, path: p, text }) => ({ mtime: taskfs.writeTaskFile(dirOf(id), path.parse(p), z.string().parse(text)) }));
