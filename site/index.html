@@ -66,6 +66,8 @@
     }
     .mockbar { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--muted); }
     .mockbar b { color: var(--text); font-weight: 600; }
+    .mockbar .stats { margin-left: auto; white-space: nowrap; }
+    @media (max-width: 640px) { .mockbar .stats { display: none; } }
     .cols { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 16px; background: var(--bg); overflow-x: auto; }
     .col h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
     .col h4 span { margin-left: 6px; font-weight: 500; }
@@ -162,7 +164,7 @@
       <div class="note">v0.1.0 test build · Windows 10/11 x64 · needs Git and a signed-in Claude Code</div>
 
       <div class="mock" role="img" aria-label="A YANTRA project board with Backlog, Todo, In progress and Review columns">
-        <div class="mockbar"><b>payments-api</b> / Board <span style="margin-left:auto" class="mono">2/3 sessions live · 412k tokens today</span></div>
+        <div class="mockbar"><b>payments-api</b> / Board <span class="mono stats">2/3 sessions live · 412k tokens today</span></div>
         <div class="cols">
           <div class="col">
             <h4>Backlog<span>3</span></h4>
